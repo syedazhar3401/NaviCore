@@ -5,8 +5,10 @@ import FleetMap from './components/FleetMap'
 import VoyageCard from './components/VoyageCard'
 import CargoFeed from './components/CargoFeed'
 import CargoOptimizer from './components/CargoOptimizer'
+import FuelOptimizer from './components/FuelOptimizer'
 import CrewRoster from './components/CrewRoster'
 import CostLedger from './components/CostLedger'
+import WeatherRisk from './components/WeatherRisk'
 import './App.css'
 
 const BACKEND_URL = 'http://localhost:4000'
@@ -61,9 +63,11 @@ export default function App() {
     fleet: <FleetMap vessels={vessels} feedEvents={feedEvents} />,
     voyage: <VoyageCard vessels={vessels} />,
     cargo: <CargoOptimizer backendUrl={BACKEND_URL} />,
+    fuel: <FuelOptimizer vessels={vessels} />,
     feed: <CargoFeed events={feedEvents} />,
     crew: <CrewRoster backendUrl={BACKEND_URL} />,
     cost: <CostLedger backendUrl={BACKEND_URL} />,
+    weather: <WeatherRisk vessels={vessels} />,
   }
 
   return (

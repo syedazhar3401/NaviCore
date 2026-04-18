@@ -1,0 +1,5 @@
+export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const dx = lat1 - lat2;
+  const dy = lon1 - lon2;
+  return Math.sqrt(dx * dx + dy * dy);
+}
