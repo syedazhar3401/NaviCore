@@ -4,6 +4,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
+import weatherRoutes from './routes/weather.js';
+import mcpRoutes from './routes/mcp.js';
 
 dotenv.config();
 
@@ -16,6 +18,8 @@ const prisma = new PrismaClient();
 
 app.use(cors());
 app.use(express.json());
+app.use('/api', weatherRoutes);
+app.use('/api', mcpRoutes);
 
 // --- REST ENDPOINTS ---
 
@@ -80,7 +84,7 @@ app.post('/api/cargo/optimize', async (req, res) => {
   // Sort by destination port sequence (LIFO: last port loaded first)
   const COLS = 5;
   const grid = [];
-  let row = [], col = 0;
+  let row: any[] = [], col = 0;
 
   const sorted = [...items].sort((a, b) => b.weightKg - a.weightKg);
   const destinations = [...new Set(sorted.map(i => i.destinationPort))];
@@ -103,8 +107,8 @@ app.post('/api/cargo/optimize', async (req, res) => {
   }
 
   // Check balance: total weight left vs right columns
-  const leftW = grid.flatMap(r => r.slice(0, 2)).filter(Boolean).reduce((a, c) => a + c.weightKg, 0);
-  const rightW = grid.flatMap(r => r.slice(3, 5)).filter(Boolean).reduce((a, c) => a + c.weightKg, 0);
+  const leftW = grid.flatMap(r => r.slice(0, 2)).filter(Boolean).reduce((a, c: any) => a + c.weightKg, 0);
+  const rightW = grid.flatMap(r => r.slice(3, 5)).filter(Boolean).reduce((a, c: any) => a + c.weightKg, 0);
   const imbalance = Math.abs(leftW - rightW);
   const isBalanced = imbalance < 5000;
 

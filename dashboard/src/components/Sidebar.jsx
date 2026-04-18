@@ -3,8 +3,10 @@ import { useState, useEffect } from 'react'
 const NAV_ITEMS = [
   { id: 'fleet', icon: '🗺️', label: 'Fleet Map', section: 'OVERVIEW' },
   { id: 'voyage', icon: '⚓', label: 'Voyage Overview', section: 'OVERVIEW' },
+  { id: 'weather', icon: '🌊', label: 'Weather & Risk', section: 'INTELLIGENCE' },
   { id: 'cost', icon: '💰', label: 'Cost Ledger', section: 'OPERATIONS' },
   { id: 'cargo', icon: '🧠', label: 'AI Cargo Optimizer', section: 'OPERATIONS' },
+  { id: 'fuel', icon: '⛽', label: 'Fuel Stop Optimizer', section: 'INTELLIGENCE' },
   { id: 'feed', icon: '📡', label: 'Loading Feed', section: 'LIVE' },
   { id: 'crew', icon: '👥', label: 'Crew Roster', section: 'LIVE' },
 ]
