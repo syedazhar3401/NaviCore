@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Vessel {
+  id         String   @id @default(uuid())
+  name       String
+  currentLat Float?
+  currentLng Float?
+  status     String   @default("AT_PORT") // AT_PORT, IN_TRANSIT, MAINTENANCE
+  voyages    Voyage[]
+  crew       CrewMember[]
+}
+
+model Voyage {
+  id              String   @id @default(uuid())
+  vesselId        String
+  vessel          Vessel   @relation(fields: [vesselId], references: [id])
+  originPort      String
+  destinationPort String
+  departureTime   DateTime?
+  status          String   @default("PLANNED") // PLANNED, ONGOING, COMPLETED
+  runningCost     Float    @default(0.0)
+  cargo           CargoItem[]
+}
+
+model CargoItem {
+  id              String   @id @default(uuid())
+  voyageId        String?
+  voyage          Voyage?  @relation(fields: [voyageId], references: [id])
+  weightKg        Float
+  contents        String
+  destinationPort String
+  owner           String
+  qrCode          String   @unique
+  loadStatus      String   @default("MANIFESTED") // MANIFESTED, LOADED, SECURED, OFFLOADED, DAMAGED
+}
+
+model CrewMember {
+  id          String   @id @default(uuid())
+  vesselId    String?
+  vessel      Vessel?  @relation(fields: [vesselId], references: [id])
+  name        String
+  role        String
+  currentZone String?
+  shiftStart  DateTime?
+}
+
+model PortDirectory {
+  id                 String   @id @default(uuid())
+  name               String   @unique
+  lat                Float
+  lng                Float
+  fuelPriceUsdPerTon Float
+  portFeesUsd        Float
+}

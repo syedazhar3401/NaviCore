@@ -1,0 +1,216 @@
+.app-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 40% at 10% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 90% 100%, rgba(26, 49, 84, 0.3) 0%, transparent 60%),
+    var(--navy-950);
+}
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  position: relative;
+}
+
+/* --- SIDEBAR --- */
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: var(--navy-900);
+  border-right: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  position: relative;
+}
+
+.sidebar-logo {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.sidebar-logo-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-icon {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--cyan-glow), var(--cyan-dim));
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 800; color: var(--navy-950);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.logo-text { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px; }
+.logo-sub { font-size: 10px; color: var(--text-secondary); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 1px; }
+
+.sidebar-status {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 20px;
+  background: rgba(0, 230, 118, 0.06);
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 11px; font-weight: 500; letter-spacing: 0.5px;
+  color: var(--green-signal);
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-section-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--text-muted);
+  padding: 10px 12px 6px;
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 8px;
+  color: var(--text-secondary); font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s; position: relative;
+  border: 1px solid transparent; background: transparent;
+  width: 100%; text-align: left; font-family: 'Inter', sans-serif;
+}
+
+.nav-item:hover {
+  background: var(--navy-700);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--cyan-glow);
+  border-color: rgba(0, 212, 255, 0.15);
+}
+
+.nav-item-icon { font-size: 16px; width: 20px; text-align: center; }
+
+.nav-badge {
+  margin-left: auto;
+  background: var(--red-alert);
+  color: white; font-size: 10px; font-weight: 700;
+  padding: 1px 6px; border-radius: 10px;
+  animation: pulse-badge 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.sidebar-footer {
+  padding: 16px; border-top: 1px solid var(--glass-border);
+  font-size: 11px; color: var(--text-muted);
+}
+
+.sidebar-time { font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600; color: var(--cyan-glow); }
+
+/* --- PAGE HEADER --- */
+.page-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 24px;
+}
+.page-title { font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; }
+.page-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+
+/* --- STAT GRID --- */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card {
+  padding: 20px; position: relative; overflow: hidden;
+}
+.stat-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan-glow), transparent);
+}
+.stat-card-gold::before { background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+.stat-card-green::before { background: linear-gradient(90deg, transparent, var(--green-signal), transparent); }
+
+/* --- FLEET MAP --- */
+.map-container {
+  background: var(--navy-800);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  height: 400px;
+}
+
+.map-svg { width: 100%; height: 100%; }
+
+/* Vessel marker */
+.vessel-marker {
+  cursor: pointer; transition: all 0.3s;
+}
+.vessel-marker:hover circle { r: 10; }
+
+/* --- CARGO FEED --- */
+.feed-container { display: flex; flex-direction: column; gap: 0; }
+.feed-item {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.feed-item:hover { background: var(--navy-800); }
+.feed-item:first-child { border-radius: 12px 12px 0 0; }
+.feed-item:last-child { border-bottom: none; border-radius: 0 0 12px 12px; }
+
+.feed-timeline {
+  width: 2px; background: var(--glass-border);
+  position: relative; align-self: stretch;
+}
+
+.feed-icon { font-size: 20px; }
+.feed-qr { font-family: 'Space Grotesk', sans-serif; font-weight: 700; color: var(--cyan-glow); font-size: 13px; }
+.feed-time { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.feed-empty {
+  padding: 60px; text-align: center; color: var(--text-muted);
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+
+/* --- CARGO OPTIMIZER --- */
+.optimizer-layout { display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+.optimizer-form { display: flex; flex-direction: column; gap: 12px; }
+.optimizer-item { display: flex; gap: 8px; align-items: center; }
+
+.hold-grid {
+  display: grid;
+  gap: 4px;
+  padding: 20px;
+  background: var(--navy-900);
+  border-radius: 8px;
+  border: 2px dashed var(--border);
+}
+
+.hold-cell {
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: var(--navy-950);
+  min-height: 48px;
+  transition: all 0.3s;
+  position: relative;
+}
+
+/* Grid layout for fleet + feed */
+.fleet-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.feed-live-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px; border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
