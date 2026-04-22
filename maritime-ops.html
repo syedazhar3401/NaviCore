@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NaviCore | Maritime Operations Dashboard</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --surface-color: #161b22;
+            --surface-light: #21262d;
+            --accent-color: #00b4d8;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --border-color: #30363d;
+            --war-zone: #f85149;
+            --danger-zone: #f0883e;
+            --high-tension: #dbab09;
+            --watch-zone: #1f6feb;
+            --normal-zone: #8b949e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 240px;
+            background-color: var(--surface-color);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: var(--accent-color);
+            margin-bottom: 2rem;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 0.25rem;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background-color: var(--surface-light);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            border-left: 3px solid var(--accent-color);
+        }
+
+        /* Main Content */
+        .main-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Topbar */
+        .topbar {
+            height: 60px;
+            background-color: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+        }
+
+        .vessel-tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .vessel-tab {
+            padding: 0.5rem 1rem;
+            background: var(--surface-light);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: 0.2s;
+        }
+
+        .vessel-tab.active {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+
+        .top-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .settings-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        /* Modules Area */
+        .module-content {
+            flex-grow: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .module-content.active {
+            display: block;
+        }
+
+        /* News Module */
+        .news-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .news-filters {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-chip {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            background: var(--surface-light);
+            font-size: 0.75rem;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+        }
+
+        .filter-chip.active {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .news-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .news-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            overflow: hidden;
+            min-height: 180px;
+        }
+
+        .news-card-main {
+            padding: 1rem;
+            flex-grow: 1;
+        }
+
+        .news-card-sidebar {
+            width: 280px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1rem;
+            border-left: 1px solid var(--border-color);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .news-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+
+        .zone-badge {
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .zone-war { background: var(--war-zone); color: white; }
+        .zone-danger { background: var(--danger-zone); color: white; }
+        .zone-tension { background: var(--high-tension); color: black; }
+        .zone-watch { background: var(--watch-zone); color: white; }
+        .zone-normal { background: var(--normal-zone); color: white; }
+
+        .news-headline {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            color: white;
+        }
+
+        .news-summary {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* Costs Module */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--surface-color);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+        }
+
+        .stat-value.ticker {
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--accent-color);
+        }
+
+        .ledger-section {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+
+        .ledger-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        .btn-primary { background: var(--accent-color); color: white; }
+        .btn-danger { background: var(--war-zone); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
+
+        .ledger-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        .ledger-table th, .ledger-table td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .ledger-table th { color: var(--text-secondary); }
+
+        /* Zones Module */
+        .zone-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .zone-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: 0.2s;
+            position: relative;
+        }
+
+        .zone-card:hover { border-color: var(--accent-color); }
+        .zone-card.over-capacity { border-color: var(--war-zone); background: rgba(248, 81, 73, 0.1); }
+
+        .zone-name { font-weight: bold; margin-bottom: 0.5rem; }
+        .zone-count { font-size: 0.8rem; color: var(--text-secondary); }
+        .zone-crew { font-size: 0.75rem; margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.25rem; }
+        .crew-tag { background: var(--surface-light); padding: 0.1rem 0.4rem; border-radius: 3px; }
+
+        .check-in-panel {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+        }
+
+        .crew-selection {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .crew-option {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+
+        .crew-option:hover, .crew-option.selected { background: var(--surface-light); }
+        .crew-option.selected { border-left: 3px solid var(--accent-color); }
+
+        /* Shifts Module */
+        .shift-active-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .shift-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .shift-overtime { border-color: var(--danger-zone); }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 600px;
+            max-width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem;
+            color: white;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { width: 60px; padding: 0.5rem; }
+            .nav-item span, .logo span { display: none; }
+            .news-card { flex-direction: column; }
+            .news-card-sidebar { width: 100%; border-left: none; border-top: 1px solid var(--border-color); }
+            .zone-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="logo">
+            <i data-lucide="anchor"></i>
+            <span>NaviCore</span>
+        </div>
+        <div class="nav-item active" onclick="switchModule('news')">
+            <i data-lucide="newspaper"></i>
+            <span>News Intel</span>
+        </div>
+        <div class="nav-item" onclick="switchModule('costs')">
+            <i data-lucide="bar-chart-3"></i>
+            <span>Cost Ledger</span>
+        </div>
+        <div class="nav-item" onclick="switchModule('zones')">
+            <i data-lucide="map"></i>
+            <span>Zone Check-in</span>
+        </div>
+        <div class="nav-item" onclick="switchModule('shifts')">
+            <i data-lucide="clock"></i>
+            <span>Shift Log</span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <div class="topbar">
+            <div class="vessel-tabs" id="vesselTabs">
+                <div class="vessel-tab active" onclick="switchVessel('NaviCore One')">NaviCore One</div>
+                <div class="vessel-tab" onclick="switchVessel('NaviCore Titan')">NaviCore Titan</div>
+            </div>
+            <div class="top-actions">
+                <span id="countdownTimer" style="font-size: 0.8rem; color: var(--text-secondary);">Refresh in 05:00</span>
+                <button class="settings-btn" onclick="toggleModal('settingsModal')">
+                    <i data-lucide="settings"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- News Module -->
+        <div id="module-news" class="module-content active">
+            <div class="news-header">
+                <h2>Maritime Intel</h2>
+                <div class="news-filters">
+                    <span class="filter-chip active" onclick="filterNews('ALL')">All</span>
+                    <span class="filter-chip" onclick="filterNews('WAR')">War Zone</span>
+                    <span class="filter-chip" onclick="filterNews('DANGER')">Danger</span>
+                    <span class="filter-chip" onclick="filterNews('TENSION')">High Tension</span>
+                    <span class="filter-chip" onclick="filterNews('WATCH')">Watch</span>
+                </div>
+            </div>
+            <div class="news-grid" id="newsGrid">
+                <!-- Articles injected here -->
+                <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                    Enter NewsAPI Key in Settings to load intel.
+                </div>
+            </div>
+        </div>
+
+        <!-- Costs Module -->
+        <div id="module-costs" class="module-content">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Voyage Cost</div>
+                    <div class="stat-value ticker" id="costTotal">$0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">HFO Accrual</div>
+                    <div class="stat-value" id="costHFO">$0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Payroll Accrual</div>
+                    <div class="stat-value" id="costPayroll">$0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Port Fees</div>
+                    <div class="stat-value" id="costPort">$0.00</div>
+                </div>
+            </div>
+
+            <div class="ledger-section">
+                <div class="ledger-header">
+                    <h3>Financial Ledger</h3>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-outline" onclick="addPortFee()">Log Port Fee</button>
+                        <button class="btn btn-primary" id="voyageToggle" onclick="toggleVoyage()">Start Voyage</button>
+                        <button class="btn btn-danger" onclick="resetVoyage()">Reset</button>
+                    </div>
+                </div>
+                <table class="ledger-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Category</th>
+                            <th>Description</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ledgerBody">
+                        <!-- Entries injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Zones Module -->
+        <div id="module-zones" class="module-content">
+            <div class="zone-grid" id="zoneGrid">
+                <!-- 12 Zones injected here -->
+            </div>
+
+            <div class="check-in-panel">
+                <div class="crew-selection">
+                    <h3 style="margin-bottom: 1rem;">Select Crew Member</h3>
+                    <div id="crewCheckinList">
+                        <!-- Crew injected here -->
+                    </div>
+                </div>
+                <div class="ledger-section">
+                    <h3>Check-in History</h3>
+                    <table class="ledger-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Crew Member</th>
+                                <th>Zone</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="checkinHistory">
+                            <!-- History injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shifts Module -->
+        <div id="module-shifts" class="module-content">
+            <div class="news-header">
+                <h2>Active Shift Timers</h2>
+                <button class="btn btn-outline" onclick="exportShiftCSV()">Export CSV</button>
+            </div>
+            
+            <div class="shift-active-grid" id="activeShifts">
+                <!-- Active shifts injected here -->
+            </div>
+
+            <div class="ledger-section">
+                <h3>Shift History</h3>
+                <table class="ledger-table">
+                    <thead>
+                        <tr>
+                            <th>Crew Name</th>
+                            <th>Started</th>
+                            <th>Ended</th>
+                            <th>Duration</th>
+                            <th>Earnings</th>
+                        </tr>
+                    </thead>
+                    <tbody id="shiftHistory">
+                        <!-- History injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>System Settings</h2>
+                <button class="settings-btn" onclick="toggleModal('settingsModal')"><i data-lucide="x"></i></button>
+            </div>
+            
+            <div class="form-group">
+                <label>NewsAPI Key</label>
+                <input type="password" id="newsApiKey" placeholder="Enter API Key">
+            </div>
+
+            <h3 style="margin: 1.5rem 0 1rem 0;">Voyage Parameters</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>HFO Price ($/MT)</label>
+                    <input type="number" id="hfoPrice" value="520">
+                </div>
+                <div class="form-group">
+                    <label>HFO Consumption (MT/Day)</label>
+                    <input type="number" id="hfoRate" value="45">
+                </div>
+            </div>
+
+            <h3 style="margin: 1.5rem 0 1rem 0;">Port Entry Fees</h3>
+            <div id="portFeeSettings" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <!-- Injected via JS -->
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; margin-top: 2rem;" onclick="saveSettings()">Save Configuration</button>
+        </div>
+    </div>
+
+    <script>
+        // --- State Management ---
+        const GLOBAL_SETTINGS = {
+            newsApiKey: '',
+            hfoPrice: 520,
+            hfoRate: 45, // MT/Day
+            portTolls: {
+                'Malacca Strait': 12400,
+                'Suez Canal': 450000,
+                'Panama Canal': 380000,
+                'Strait of Hormuz': 15000,
+                'Gibraltar': 8000,
+                'English Channel': 5000
+            },
+            defaultCrew: [
+                { name: 'Elena Vance', rank: 'Captain', salary: 8500 },
+                { name: 'Marcus Thorne', rank: 'Chief Officer', salary: 5200 },
+                { name: 'Sarah Chen', rank: 'Chief Engineer', salary: 4800 },
+                { name: 'Jack Ripper', rank: 'Deckhand', salary: 3200 },
+                { name: 'Linda Miller', rank: 'Deckhand', salary: 3200 },
+                { name: 'Tom Hardy', rank: 'Cook', salary: 2800 },
+                { name: 'Sam Bridges', rank: 'Radio Operator', salary: 3500 },
+                { name: 'Arthur Curry', rank: 'Bosun', salary: 4000 }
+            ]
+        };
+
+        const VESSELS = {
+            'NaviCore One': createVesselState(),
+            'NaviCore Titan': createVesselState()
+        };
+
+        function createVesselState() {
+            return {
+                costs: { hfo: 0, payroll: 0, port: 0, total: 0 },
+                isVoyageRunning: false,
+                ledger: [],
+                zones: {
+                    'Bridge': [], 'Engine Room': [], 'Port Deck': [], 'Starboard Deck': [],
+                    'Bow': [], 'Stern': [], 'Cargo Hold 1': [], 'Cargo Hold 2': [],
+                    'Mess Hall': [], 'Crew Quarters': [], 'Medical Bay': [], 'Control Room': []
+                },
+                zoneHistory: [],
+                activeShifts: {},
+                shiftHistory: [],
+                crew: JSON.parse(JSON.stringify(GLOBAL_SETTINGS.defaultCrew))
+            };
+        }
+
+        let currentVessel = 'NaviCore One';
+        let newsArticles = [];
+        let newsFilter = 'ALL';
+        let refreshCountdown = 300; // 5 minutes
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initZones();
+            initPortSettings();
+            renderAll();
+            startIntervals();
+        });
+
+        function initZones() {
+            const grid = document.getElementById('zoneGrid');
+            const zoneNames = Object.keys(VESSELS[currentVessel].zones);
+            grid.innerHTML = zoneNames.map(name => `
+                <div class="zone-card" id="zone-${name.replace(/ /g, '-')}" onclick="checkInToZone('${name}')">
+                    <div class="zone-name">${name}</div>
+                    <div class="zone-count">Occupancy: 0 / 3</div>
+                    <div class="crew-tags zone-crew"></div>
+                </div>
+            `).join('');
+        }
+
+        function initPortSettings() {
+            const container = document.getElementById('portFeeSettings');
+            container.innerHTML = Object.entries(GLOBAL_SETTINGS.portTolls).map(([name, price]) => `
+                <div class="form-group">
+                    <label>${name}</label>
+                    <input type="number" value="${price}" onchange="GLOBAL_SETTINGS.portTolls['${name}'] = Number(this.value)">
+                </div>
+            `).join('');
+        }
+
+        // --- Logic Engine ---
+        function startIntervals() {
+            setInterval(() => {
+                // News Countdown
+                refreshCountdown--;
+                if (refreshCountdown <= 0) {
+                    fetchNews();
+                    refreshCountdown = 300;
+                }
+                const mins = Math.floor(refreshCountdown / 60);
+                const secs = refreshCountdown % 60;
+                document.getElementById('countdownTimer').innerText = `Refresh in ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+                // Real-time Costs
+                Object.values(VESSELS).forEach(v => {
+                    if (v.isVoyageRunning) {
+                        // HFO cost: (Rate / 86400 secs) * Price
+                        const hfoPerSec = (GLOBAL_SETTINGS.hfoRate / 86400) * GLOBAL_SETTINGS.hfoPrice;
+                        v.costs.hfo += hfoPerSec;
+
+                        // Payroll cost: Total Monthly / (30 days * 86400)
+                        const totalMonthly = v.crew.reduce((acc, c) => acc + c.salary, 0);
+                        const payrollPerSec = totalMonthly / (30 * 86400);
+                        v.costs.payroll += payrollPerSec;
+
+                        v.costs.total = v.costs.hfo + v.costs.payroll + v.costs.port;
+                    }
+
+                    // Update Shift Timers
+                    Object.values(v.activeShifts).forEach(shift => {
+                        shift.elapsed = Date.now() - shift.startTime;
+                    });
+                });
+
+                if (activeModule === 'costs') updateCostUI();
+                if (activeModule === 'shifts') renderShifts();
+            }, 1000);
+        }
+
+        // --- News Module ---
+        async function fetchNews() {
+            const fallbacks = [
+                {
+                    title: "Hormuz Shipping Traffic Remains Below Normal Despite Ceasefire",
+                    description: "Vessel tracking data indicates tanker traffic through the Strait of Hormuz has not yet returned to pre-conflict levels despite recent diplomatic progress.",
+                    source: { name: "NaviCore Intel" },
+                    publishedAt: new Date().toISOString(),
+                    url: "#"
+                },
+                {
+                    title: "US Forces Intercept Iranian Cargo Vessel in Gulf of Oman",
+                    description: "Naval units conducted a boarding operation on a suspicious cargo vessel suspected of violating regional maritime security protocols.",
+                    source: { name: "NaviCore Intel" },
+                    publishedAt: new Date().toISOString(),
+                    url: "#"
+                },
+                {
+                    title: "Three Ships Fired Upon in Strait of Hormuz",
+                    description: "Multiple commercial vessels reported incoming fire from unidentified fast-attack craft near the coastal exclusion zone.",
+                    source: { name: "NaviCore Intel" },
+                    publishedAt: new Date().toISOString(),
+                    url: "#"
+                },
+                {
+                    title: "China's Drone-Laid Mines Aim to Trap US in a Taiwan War",
+                    description: "Intelligence reports suggest deployment of autonomous underwater mining systems along strategic deep-water shipping lanes.",
+                    source: { name: "NaviCore Intel" },
+                    publishedAt: new Date().toISOString(),
+                    url: "#"
+                },
+                {
+                    title: "Activists Encircle MSC Containership in Mediterranean",
+                    description: "Small craft protest units blocked the approach to a major container terminal, causing 6-hour docking delays.",
+                    source: { name: "NaviCore Intel" },
+                    publishedAt: new Date().toISOString(),
+                    url: "#"
+                }
+            ];
+
+            let articles = [];
+
+            if (GLOBAL_SETTINGS.newsApiKey) {
+                const q = "maritime OR shipping OR vessel OR port OR tanker OR strait";
+                const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(q)}&language=en&sortBy=publishedAt&pageSize=20&searchIn=title,description&apiKey=${GLOBAL_SETTINGS.newsApiKey}`;
+                
+                try {
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    let fetchedArticles = data.articles || [];
+
+                    const MARITIME_MUST_HAVE = [
+                        'ship','vessel','port','maritime','tanker','cargo','strait',
+                        'hormuz','suez','malacca','shipping','navy','coast guard',
+                        'seafarer','offshore','fleet','freighter','dock','harbour'
+                    ];
+
+                    articles = fetchedArticles.filter(a => {
+                        const text = ((a.title || '') + ' ' + (a.description || '')).toLowerCase();
+                        return MARITIME_MUST_HAVE.some(kw => text.includes(kw));
+                    });
+                } catch (e) {
+                    console.error("News fetch failed", e);
+                }
+            }
+
+            // Ensure minimum 3 news items using fallbacks if necessary
+            if (articles.length < 3) {
+                const needed = 3 - articles.length;
+                // Add unique fallbacks that aren't already in fetched articles (by title)
+                const extra = fallbacks.filter(f => !articles.some(a => a.title === f.title)).slice(0, Math.max(needed, fallbacks.length));
+                articles = [...articles, ...extra];
+            }
+
+            newsArticles = articles.map(art => ({
+                ...art,
+                zone: classifyArticle(art.title + ' ' + (art.description || ''))
+            }));
+            
+            renderNews();
+        }
+
+        function classifyArticle(text) {
+            const t = text.toLowerCase();
+            if (/\b(attack|missile|fired|warfare|military strike)\b/.test(t)) return 'WAR';
+            if (/\b(seized|boarded|hijack|piracy|detained)\b/.test(t)) return 'DANGER';
+            if (/\b(sanctions|blockade|standoff|escalation|warned)\b/.test(t)) return 'TENSION';
+            if (/\b(dispute|protest|congestion|delay|rerouted)\b/.test(t)) return 'WATCH';
+            return 'NORMAL';
+        }
+
+        function renderNews() {
+            const grid = document.getElementById('newsGrid');
+            const filtered = newsFilter === 'ALL' ? newsArticles : newsArticles.filter(a => a.zone === newsFilter);
+            
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div style="text-align: center; padding: 3rem; color: var(--text-secondary);">No articles found for this filter.</div>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(art => `
+                <div class="news-card">
+                    <div class="news-card-main">
+                        <div class="news-meta">
+                            <span class="zone-badge zone-${art.zone.toLowerCase()}">${art.zone} ZONE</span>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">${new Date(art.publishedAt).toLocaleString()}</span>
+                        </div>
+                        <h3 class="news-headline">${art.title}</h3>
+                        <p style="font-size: 0.75rem; color: var(--accent-color); margin-bottom: 0.5rem;">${art.source.name}</p>
+                        <p class="news-summary">${art.description || ''}</p>
+                    </div>
+                    <div class="news-card-sidebar">
+                        <strong>AI INTEL SUMMARY</strong><br><br>
+                        ${generateMockSummary(art)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function generateMockSummary(art) {
+            const reasons = {
+                WAR: "Immediate kinetic threat detected. High risk of vessel damage.",
+                DANGER: "Maritime security incident. Boarding or seizure risk elevated.",
+                TENSION: "Geopolitical friction impacting trade routes. Sanctions risk.",
+                WATCH: "Operational disruption or logistical delay expected.",
+                NORMAL: "Routine maritime reporting. No immediate tactical threat."
+            };
+            return `Article flags a ${art.zone} classification due to context around shipping logistics. Reasoning: ${reasons[art.zone]} Operations should maintain standard vigilance while monitoring port updates.`;
+        }
+
+        function filterNews(f) {
+            newsFilter = f;
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            renderNews();
+        }
+
+        // --- Cost Module ---
+        function toggleVoyage() {
+            const v = VESSELS[currentVessel];
+            v.isVoyageRunning = !v.isVoyageRunning;
+            const btn = document.getElementById('voyageToggle');
+            btn.innerText = v.isVoyageRunning ? 'Pause Voyage' : 'Resume Voyage';
+            btn.className = v.isVoyageRunning ? 'btn btn-outline' : 'btn btn-primary';
+            
+            logLedger('Voyage', v.isVoyageRunning ? 'Voyage started/resumed' : 'Voyage paused', 0);
+        }
+
+        function resetVoyage() {
+            if (!confirm("Reset all accrued costs for this vessel?")) return;
+            const v = VESSELS[currentVessel];
+            v.costs = { hfo: 0, payroll: 0, port: 0, total: 0 };
+            v.ledger = [];
+            v.isVoyageRunning = false;
+            document.getElementById('voyageToggle').innerText = 'Start Voyage';
+            document.getElementById('voyageToggle').className = 'btn btn-primary';
+            renderCosts();
+        }
+
+        function addPortFee() {
+            const v = VESSELS[currentVessel];
+            const ports = Object.keys(GLOBAL_SETTINGS.portTolls);
+            const port = prompt(`Select Port:\n${ports.join('\n')}`, ports[0]);
+            if (port && GLOBAL_SETTINGS.portTolls[port]) {
+                const amt = GLOBAL_SETTINGS.portTolls[port];
+                v.costs.port += amt;
+                logLedger('Port Fee', `Transit via ${port}`, amt);
+                renderCosts();
+            }
+        }
+
+        function logLedger(cat, desc, amt) {
+            const v = VESSELS[currentVessel];
+            v.ledger.unshift({
+                time: new Date().toLocaleTimeString(),
+                cat, desc, amt
+            });
+            renderLedger();
+        }
+
+        function updateCostUI() {
+            const v = VESSELS[currentVessel];
+            document.getElementById('costTotal').innerText = `$${v.costs.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('costHFO').innerText = `$${v.costs.hfo.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('costPayroll').innerText = `$${v.costs.payroll.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('costPort').innerText = `$${v.costs.port.toLocaleString(undefined, {maximumFractionDigits: 0})}`;
+        }
+
+        // --- Zone Module ---
+        let selectedCrewForCheckin = null;
+
+        function renderZones() {
+            const v = VESSELS[currentVessel];
+            Object.entries(v.zones).forEach(([name, crewList]) => {
+                const el = document.getElementById(`zone-${name.replace(/ /g, '-')}`);
+                if (!el) return;
+                el.className = `zone-card ${crewList.length > 3 ? 'over-capacity' : ''}`;
+                el.querySelector('.zone-count').innerText = `Occupancy: ${crewList.length} / 3`;
+                el.querySelector('.zone-crew').innerHTML = crewList.map(c => `<span class="crew-tag">${c}</span>`).join('');
+            });
+        }
+
+        function checkInToZone(zoneName) {
+            if (!selectedCrewForCheckin) {
+                alert("Please select a crew member first.");
+                return;
+            }
+            const v = VESSELS[currentVessel];
+            
+            // Remove from old zone
+            Object.keys(v.zones).forEach(z => {
+                v.zones[z] = v.zones[z].filter(c => c !== selectedCrewForCheckin.name);
+            });
+
+            // Add to new zone
+            v.zones[zoneName].push(selectedCrewForCheckin.name);
+            
+            v.zoneHistory.unshift({
+                time: new Date().toLocaleTimeString(),
+                crew: selectedCrewForCheckin.name,
+                zone: zoneName,
+                action: 'Check-in'
+            });
+
+            if (v.zoneHistory.length > 20) v.zoneHistory.pop();
+            
+            selectedCrewForCheckin = null;
+            renderAll();
+        }
+
+        function selectCrewForCheckin(name) {
+            const v = VESSELS[currentVessel];
+            selectedCrewForCheckin = v.crew.find(c => c.name === name);
+            renderCrewList();
+        }
+
+        // --- Shifts Module ---
+        function toggleShift(crewName) {
+            const v = VESSELS[currentVessel];
+            if (v.activeShifts[crewName]) {
+                // Clock out
+                const shift = v.activeShifts[crewName];
+                const endTime = Date.now();
+                const durationMs = endTime - shift.startTime;
+                const hours = durationMs / 3600000;
+                
+                // Calculate pay: (Monthly / 160 hours avg) * duration
+                const hourlyRate = v.crew.find(c => c.name === crewName).salary / 160;
+                const earnings = hours * hourlyRate;
+
+                v.shiftHistory.unshift({
+                    name: crewName,
+                    start: new Date(shift.startTime).toLocaleTimeString(),
+                    end: new Date(endTime).toLocaleTimeString(),
+                    duration: (durationMs / 60000).toFixed(1) + 'm',
+                    earnings: `$${earnings.toFixed(2)}`
+                });
+
+                delete v.activeShifts[crewName];
+            } else {
+                // Clock in
+                v.activeShifts[crewName] = {
+                    startTime: Date.now(),
+                    elapsed: 0
+                };
+            }
+            renderShifts();
+        }
+
+        function renderShifts() {
+            const v = VESSELS[currentVessel];
+            const activeContainer = document.getElementById('activeShifts');
+            const historyContainer = document.getElementById('shiftHistory');
+
+            activeContainer.innerHTML = v.crew.map(c => {
+                const shift = v.activeShifts[c.name];
+                const isOvertime = shift && shift.elapsed > 8 * 3600000; // 8 hours
+                return `
+                    <div class="shift-card ${isOvertime ? 'shift-overtime' : ''}">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>${c.name}</strong><br>
+                                <span style="font-size: 0.8rem; color: var(--text-secondary);">${c.rank}</span>
+                            </div>
+                            <button class="btn ${shift ? 'btn-danger' : 'btn-primary'}" onclick="toggleShift('${c.name}')">
+                                ${shift ? 'Clock Out' : 'Clock In'}
+                            </button>
+                        </div>
+                        ${shift ? `
+                            <div style="margin-top: 1rem; font-family: monospace; font-size: 1.2rem; color: var(--accent-color);">
+                                ${formatMs(shift.elapsed)}
+                            </div>
+                        ` : '<div style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Off Duty</div>'}
+                    </div>
+                `;
+            }).join('');
+
+            historyContainer.innerHTML = v.shiftHistory.map(s => `
+                <tr>
+                    <td>${s.name}</td>
+                    <td>${s.start}</td>
+                    <td>${s.end}</td>
+                    <td>${s.duration}</td>
+                    <td>${s.earnings}</td>
+                </tr>
+            `).join('');
+        }
+
+        function formatMs(ms) {
+            const h = Math.floor(ms / 3600000);
+            const m = Math.floor((ms % 3600000) / 60000);
+            const s = Math.floor((ms % 60000) / 1000);
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function exportShiftCSV() {
+            const v = VESSELS[currentVessel];
+            let csv = "Crew Name,Started,Ended,Duration,Earnings\n";
+            v.shiftHistory.forEach(s => {
+                csv += `"${s.name}","${s.start}","${s.end}","${s.duration}","${s.earnings}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('hidden', '');
+            a.setAttribute('href', url);
+            a.setAttribute('download', `shifts_${currentVessel.replace(' ', '_')}.csv`);
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        // --- Navigation ---
+        let activeModule = 'news';
+        function switchModule(mod) {
+            activeModule = mod;
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            document.querySelectorAll('.module-content').forEach(c => c.classList.remove('active'));
+            
+            event.currentTarget.classList.add('active');
+            document.getElementById(`module-${mod}`).classList.add('active');
+            renderAll();
+        }
+
+        function switchVessel(vessel) {
+            currentVessel = vessel;
+            document.querySelectorAll('.vessel-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Update UI state
+            const v = VESSELS[currentVessel];
+            const btn = document.getElementById('voyageToggle');
+            btn.innerText = v.isVoyageRunning ? 'Pause Voyage' : 'Resume Voyage';
+            btn.className = v.isVoyageRunning ? 'btn btn-outline' : 'btn btn-primary';
+
+            renderAll();
+        }
+
+        // --- UI Rendering ---
+        function renderAll() {
+            if (activeModule === 'news') renderNews();
+            if (activeModule === 'costs') renderCosts();
+            if (activeModule === 'zones') renderZoneModule();
+            if (activeModule === 'shifts') renderShifts();
+            lucide.createIcons();
+        }
+
+        function renderCosts() {
+            updateCostUI();
+            renderLedger();
+        }
+
+        function renderLedger() {
+            const v = VESSELS[currentVessel];
+            const body = document.getElementById('ledgerBody');
+            body.innerHTML = v.ledger.map(entry => `
+                <tr>
+                    <td>${entry.time}</td>
+                    <td>${entry.cat}</td>
+                    <td>${entry.desc}</td>
+                    <td>${entry.amt > 0 ? '$' + entry.amt.toLocaleString() : '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderZoneModule() {
+            renderZones();
+            renderCrewList();
+            renderZoneHistory();
+        }
+
+        function renderCrewList() {
+            const v = VESSELS[currentVessel];
+            const list = document.getElementById('crewCheckinList');
+            list.innerHTML = v.crew.map(c => `
+                <div class="crew-option ${selectedCrewForCheckin?.name === c.name ? 'selected' : ''}" onclick="selectCrewForCheckin('${c.name}')">
+                    <strong>${c.name}</strong><br>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">${c.rank}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderZoneHistory() {
+            const v = VESSELS[currentVessel];
+            const history = document.getElementById('checkinHistory');
+            history.innerHTML = v.zoneHistory.map(h => `
+                <tr>
+                    <td>${h.time}</td>
+                    <td>${h.crew}</td>
+                    <td>${h.zone}</td>
+                    <td>${h.action}</td>
+                </tr>
+            `).join('');
+        }
+
+        // --- Settings ---
+        function toggleModal(id) {
+            const el = document.getElementById(id);
+            el.style.display = el.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function saveSettings() {
+            GLOBAL_SETTINGS.newsApiKey = document.getElementById('newsApiKey').value;
+            GLOBAL_SETTINGS.hfoPrice = Number(document.getElementById('hfoPrice').value);
+            GLOBAL_SETTINGS.hfoRate = Number(document.getElementById('hfoRate').value);
+            
+            toggleModal('settingsModal');
+            if (GLOBAL_SETTINGS.newsApiKey) fetchNews();
+            renderAll();
+        }
+    </script>
+</body>
+</html>

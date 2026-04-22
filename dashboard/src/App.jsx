@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { io } from 'socket.io-client'
 import Sidebar from './components/Sidebar'
 import FleetMap from './components/FleetMap'
@@ -9,6 +9,7 @@ import FuelOptimizer from './components/FuelOptimizer'
 import CrewRoster from './components/CrewRoster'
 import CostLedger from './components/CostLedger'
 import WeatherRisk from './components/WeatherRisk'
+import NewsPanel from './components/NewsPanel'
 import './App.css'
 
 const BACKEND_URL = 'http://localhost:4000'
@@ -22,7 +23,22 @@ export default function App() {
   const [activeView, setActiveView] = useState('fleet')
   const [feedEvents, setFeedEvents] = useState([])
   const [vessels, setVessels] = useState(MOCK_VESSELS)
+  const [costUpdates, setCostUpdates] = useState({})
+  const [connectionStatus, setConnectionStatus] = useState('connecting')
   const socketRef = useRef(null)
+  const pollingRef = useRef(null)
+
+  // --- Fetch latest state via HTTP (fallback for socket disconnects) ---
+  const fetchLatestState = useCallback(async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/health`)
+      if (res.ok) {
+        console.log('[Fallback] HTTP poll OK — waiting for socket reconnect')
+      }
+    } catch {
+      console.warn('[Fallback] Backend unreachable via HTTP')
+    }
+  }, [])
 
   useEffect(() => {
     // Connect to backend WebSocket
@@ -31,6 +47,29 @@ export default function App() {
 
     socket.on('connect', () => {
       console.log('NaviCore Dashboard connected to backend')
+      setConnectionStatus('connected')
+
+      // Stop HTTP polling fallback if it was running
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+        console.log('[Socket] Reconnected — stopped HTTP polling')
+      }
+    })
+
+    // --- Connection Drop Resilience ---
+    socket.on('disconnect', () => {
+      console.warn('[Socket] Disconnected — starting HTTP polling fallback')
+      setConnectionStatus('disconnected')
+
+      // Start polling every 5 seconds until reconnected
+      if (!pollingRef.current) {
+        pollingRef.current = setInterval(fetchLatestState, 5000)
+      }
+    })
+
+    socket.on('reconnect_attempt', () => {
+      setConnectionStatus('reconnecting')
     })
 
     // THE MAGIC LOOP: Listen for deckhand QR scan events
@@ -42,6 +81,20 @@ export default function App() {
         timestamp: new Date(data.timestamp).toLocaleTimeString(),
         voyageId: data.voyageId,
       }, ...prev].slice(0, 50))
+    })
+
+    // --- Targeted COST_UPDATE rendering ---
+    // Only update state for the specific voyage that changed
+    socket.on('COST_UPDATE', (data) => {
+      setCostUpdates(prev => ({
+        ...prev,
+        [data.voyageId]: data,
+      }))
+    })
+
+    // --- System Alerts ---
+    socket.on('SYSTEM_ALERT', (data) => {
+      console.warn('[SYSTEM_ALERT]', data.message)
     })
 
     // Simulate vessel movement
@@ -56,8 +109,12 @@ export default function App() {
     return () => {
       socket.disconnect()
       clearInterval(moveInterval)
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
     }
-  }, [])
+  }, [fetchLatestState])
 
   const views = {
     fleet: <FleetMap vessels={vessels} feedEvents={feedEvents} />,
@@ -66,14 +123,26 @@ export default function App() {
     fuel: <FuelOptimizer vessels={vessels} />,
     feed: <CargoFeed events={feedEvents} />,
     crew: <CrewRoster backendUrl={BACKEND_URL} />,
-    cost: <CostLedger backendUrl={BACKEND_URL} />,
+    cost: <CostLedger backendUrl={BACKEND_URL} costUpdates={costUpdates} />,
     weather: <WeatherRisk vessels={vessels} />,
+    news: <NewsPanel vessels={vessels} />,
   }
 
   return (
     <div className="app-layout">
-      <Sidebar activeView={activeView} onNavigate={setActiveView} feedEvents={feedEvents} />
+      <Sidebar
+        activeView={activeView}
+        onNavigate={setActiveView}
+        feedEvents={feedEvents}
+        connectionStatus={connectionStatus}
+      />
       <main className="app-main">
+        {connectionStatus === 'disconnected' && (
+          <div className="connection-banner connection-banner-warn">
+            <span className="dot dot-amber pulse" style={{ width: 8, height: 8, minWidth: 8 }}></span>
+            Connection lost — attempting to reconnect…
+          </div>
+        )}
         <div className="fade-in" key={activeView}>
           {views[activeView]}
         </div>

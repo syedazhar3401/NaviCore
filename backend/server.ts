@@ -6,6 +6,9 @@ import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 import weatherRoutes from './routes/weather.js';
 import mcpRoutes from './routes/mcp.js';
+import crewRoutes from './routes/crew.js';
+import newsRoutes from './routes/news.js';
+import { startCostEngine } from './utils/costEngine.js';
 
 dotenv.config();
 
@@ -20,6 +23,8 @@ app.use(cors());
 app.use(express.json());
 app.use('/api', weatherRoutes);
 app.use('/api', mcpRoutes);
+app.use('/api', crewRoutes);
+app.use('/api', newsRoutes);
 
 // --- REST ENDPOINTS ---
 
@@ -140,4 +145,8 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 4000;
 httpServer.listen(PORT, () => {
   console.log(`NaviCore Backend running on http://localhost:${PORT}`);
+
+  // Start the cost accrual engine once the server is ready
+  startCostEngine(prisma, io);
 });
+
