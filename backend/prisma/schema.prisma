@@ -27,7 +27,19 @@ model Voyage {
   departureTime   DateTime?
   status          String   @default("PLANNED") // PLANNED, ONGOING, COMPLETED
   runningCost     Float    @default(0.0)
+  runningCostCents Int     @default(0)
+  lastTickAt      DateTime @default(now())
+  costConfigId    String?
+  costConfig      VoyageCostConfig? @relation(fields: [costConfigId], references: [id])
   cargo           CargoItem[]
+}
+
+model VoyageCostConfig {
+  id                      String @id @default(uuid())
+  fuelPriceUsdPerTon      Float
+  fuelConsumptionTph      Float   // tonnes per hour
+  portFeesUsd             Float   // fixed
+  voyages                 Voyage[]
 }
 
 model CargoItem {
@@ -48,8 +60,21 @@ model CrewMember {
   vessel      Vessel?  @relation(fields: [vesselId], references: [id])
   name        String
   role        String
+  hourlyRate  Float    @default(15.0) // USD/hr
+  isActive    Boolean  @default(true)
   currentZone String?
   shiftStart  DateTime?
+  shifts      ShiftLog[]
+}
+
+model ShiftLog {
+  id        String   @id @default(uuid())
+  crewId    String
+  crew      CrewMember @relation(fields: [crewId], references: [id])
+  startTime DateTime
+  endTime   DateTime?
+
+  @@index([crewId])
 }
 
 model PortDirectory {
@@ -59,4 +84,11 @@ model PortDirectory {
   lng                Float
   fuelPriceUsdPerTon Float
   portFeesUsd        Float
+}
+
+model NewsCache {
+  id        String   @id @default(uuid())
+  region    String
+  fetchedAt DateTime
+  payload   Json
 }

@@ -5,6 +5,8 @@ import { calculateDistance } from "../utils/distance.js";
 
 const router = express.Router();
 
+const BACKEND_BASE = `http://localhost:${process.env.PORT || 4000}`;
+
 router.post("/mcp/analyze-risk", async (req, res) => {
   const { lat, lng, fuelRemaining, destination } = req.body;
 
@@ -15,48 +17,109 @@ router.post("/mcp/analyze-risk", async (req, res) => {
   try {
     // 1. Get weather from our own weather endpoint
     const weatherRes = await axios.get(
-      `http://localhost:${process.env.PORT || 4000}/api/weather?lat=${lat}&lng=${lng}`
+      `${BACKEND_BASE}/api/weather?lat=${lat}&lng=${lng}`
     );
-
     const weather = weatherRes.data;
 
-    // 2. Compute risk factors
-    let weatherRisk = 0;
-    if (weather.windSpeed > 8) weatherRisk += 0.4;
-    if (weather.weather === "Rain" || weather.weather === "Thunderstorm" || weather.weather === "Storm")
-      weatherRisk += 0.3;
+    // 2. Try to get marine data (wave height etc.) — graceful fallback
+    let marine: any = null;
+    try {
+      const marineRes = await axios.get(
+        `${BACKEND_BASE}/api/weather/marine?lat=${lat}&lng=${lng}`
+      );
+      marine = marineRes.data;
+    } catch {
+      // Marine data may not be available for all coordinates — that's OK
+    }
 
-    const fuelRisk = fuelRemaining < 100 ? 0.3 : 0.1;
+    // Helper function for clamping values
+    const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
 
-    // Distance factor (demo — would use real port coordinates later)
-    const distanceRisk = 0.2;
+    // --- W: Weather Risk (30%) ---
+    const windScore = clamp((weather.windSpeed - 8) / (15 - 8), 0, 1);
+    
+    let conditionScore = 0;
+    if (weather.weather === "Thunderstorm" || weather.weather === "Storm") conditionScore = 1;
+    else if (weather.weather === "Rain" || weather.weather === "Fog" || weather.weather === "Drizzle") conditionScore = 0.5;
+    else if (weather.weather === "Clouds") conditionScore = 0.2;
 
-    const totalRisk = Math.min(weatherRisk + fuelRisk + distanceRisk, 1);
+    const weatherRisk = clamp((windScore * 0.7) + (conditionScore * 0.3), 0, 1);
 
-    // 3. Alerts
+    // --- S: Sea State Risk (15%) ---
+    let seaRisk = 0;
+    if (marine?.waveHeight) {
+      // Scales linearly from 1.5m to 4.0m
+      seaRisk = clamp((marine.waveHeight - 1.5) / (4.0 - 1.5), 0, 1);
+    }
+
+    // --- D: Distance Risk (20%) ---
+    let distanceRisk = 0.1; // default minimum
+    let distanceNm: number | null = null;
+    let estFuelNeeded = 0;
+    
+    if (destination) {
+      const destPort = ports.find(
+        (p) => p.name.toLowerCase().includes(destination.toLowerCase()) ||
+               p.country.toLowerCase().includes(destination.toLowerCase())
+      );
+      if (destPort) {
+        distanceNm = calculateDistance(lat, lng, destPort.lat, destPort.lng);
+        distanceRisk = clamp(distanceNm / 2000, 0.1, 1);
+        estFuelNeeded = distanceNm * 0.15; // 0.15 Tonnes/NM assumption
+      }
+    }
+
+    // --- F: Fuel Risk (35%) ---
+    let fuelRisk = 0;
+    if (distanceNm) {
+      const ratio = estFuelNeeded / fuelRemaining;
+      fuelRisk = clamp((ratio - 0.5) / 0.4, 0, 1);
+    } else {
+      // Fallback if no destination given
+      fuelRisk = fuelRemaining < 50 ? 1 : fuelRemaining < 100 ? 0.6 : 0;
+    }
+
+    // Total Risk Calculation
+    const totalRisk = clamp((weatherRisk * 0.30) + (seaRisk * 0.15) + (fuelRisk * 0.35) + (distanceRisk * 0.20), 0, 1);
+
+    // 4. Alerts
     const alerts: string[] = [];
-    if (weather.windSpeed > 8) alerts.push("High wind speed");
-    if (fuelRemaining < 100) alerts.push("Low fuel");
-    if (weather.weather === "Rain") alerts.push("Rainy conditions");
-    if (weather.weather === "Thunderstorm" || weather.weather === "Storm") alerts.push("Storm detected");
+    if (weather.windSpeed > 15) alerts.push(`Severe wind: ${weather.windSpeed.toFixed(1)} m/s`);
+    if (fuelRisk > 0.8) alerts.push("Critical fuel level for journey");
+    if (weather.weather === "Thunderstorm") alerts.push("Storm detected — avoid area");
+    if (marine?.waveHeight && marine.waveHeight > 4.0) alerts.push(`Dangerous waves: ${marine.waveHeight.toFixed(1)}m`);
 
-    // 4. Recommendation
-    let recommendation = "Safe to proceed";
+    // 5. Recommendation
+    let recommendation = "Safe to proceed — conditions favorable";
     if (totalRisk > 0.7) {
-      recommendation = "Delay voyage or refuel immediately";
-    } else if (totalRisk > 0.4) {
-      recommendation = "Proceed with caution";
+      recommendation = "⚠️ Delay voyage or seek shelter and refuel immediately";
+    } else if (totalRisk > 0.5) {
+      recommendation = "Proceed with extreme caution — monitor conditions closely";
+    } else if (totalRisk > 0.3) {
+      recommendation = "Proceed with caution — some risk factors elevated";
     }
 
     res.json({
-      riskScore: totalRisk,
+      riskScore: Math.round(totalRisk * 100) / 100,
+      weatherRisk: Math.round(weatherRisk * 100) / 100,
+      seaRisk: Math.round(seaRisk * 100) / 100,
+      fuelRisk: Math.round(fuelRisk * 100) / 100,
+      distanceRisk: Math.round(distanceRisk * 100) / 100,
       alerts,
       recommendation,
       weather: {
         windSpeed: weather.windSpeed,
+        windDirection: weather.windDirection,
         condition: weather.weather,
         temp: weather.temp,
+        humidity: weather.humidity,
       },
+      marine: marine ? {
+        waveHeight: marine.waveHeight,
+        wavePeriod: marine.wavePeriod,
+        swellHeight: marine.swellHeight,
+      } : null,
+      distanceToDestination: distanceNm ? Math.round(distanceNm) : null,
       input: { lat, lng, fuelRemaining, destination },
     });
   } catch (err: any) {
@@ -73,31 +136,56 @@ router.post("/mcp/recommend-fuel-stop", async (req, res) => {
     return res.status(400).json({ error: "Missing inputs (lat, lng, fuelRemaining)" });
   }
 
-  let bestPort: { name: string, country: string, distance: number, fuelPricePerTon: number, estimatedFuelNeeded: number, fuelRisk: number } | null = null;
+  // Consumption rate in tonnes per nautical mile (default 0.15 for medium vessel)
+  const consumptionPerNm = fuelConsumptionRate || 0.15;
+
+  let bestPort: {
+    name: string; country: string; lat: number; lng: number;
+    distance: number; fuelPricePerTon: number; portFees: number;
+    estimatedFuelNeeded: number; fuelRisk: number; reachable: boolean;
+  } | null = null;
   let bestScore = Infinity;
 
-  for (const port of ports) {
+  const allPortResults = ports.map((port) => {
     const distance = calculateDistance(lat, lng, port.lat, port.lng);
+    const estimatedFuelNeeded = distance * consumptionPerNm;
+    const reachable = estimatedFuelNeeded <= fuelRemaining;
+    const fuelRisk = !reachable ? 1 : estimatedFuelNeeded > fuelRemaining * 0.8 ? 0.6 : 0.1;
 
-    // Fuel needed estimation (simple model)
-    const estimatedFuelNeeded = distance * (fuelConsumptionRate || 10);
-
-    const fuelRisk = estimatedFuelNeeded > fuelRemaining ? 1 : 0.2;
-
+    // Score: balance cost, distance, and fuel risk (lower is better)
     const costScore =
-      port.fuelPricePerTon * 0.5 +
-      port.portFees * 0.3 +
-      distance * 100 +
-      fuelRisk * 500;
+      port.fuelPricePerTon * 0.3 +
+      port.portFees * 0.2 +
+      distance * 0.8 +
+      fuelRisk * 1000;
 
-    if (costScore < bestScore) {
+    const result = {
+      name: port.name,
+      country: port.country,
+      lat: port.lat,
+      lng: port.lng,
+      distance: Math.round(distance),
+      fuelPricePerTon: port.fuelPricePerTon,
+      portFees: port.portFees,
+      estimatedFuelNeeded: Math.round(estimatedFuelNeeded),
+      fuelRisk,
+      reachable,
+      costScore,
+    };
+
+    if (reachable && costScore < bestScore) {
       bestScore = costScore;
-      bestPort = {
-        ...port,
-        distance: Math.round(distance * 100) / 100,
-        estimatedFuelNeeded: Math.round(estimatedFuelNeeded * 100) / 100,
-        fuelRisk,
-      };
+      bestPort = result;
+    }
+
+    return result;
+  });
+
+  // If no reachable port, pick the closest one
+  if (!bestPort) {
+    const closest = allPortResults.sort((a, b) => a.distance - b.distance)[0];
+    if (closest) {
+      bestPort = closest;
     }
   }
 
@@ -106,29 +194,37 @@ router.post("/mcp/recommend-fuel-stop", async (req, res) => {
   }
 
   const recommendation =
-    bestPort.fuelRisk === 1
-      ? `URGENT: Refuel at ${bestPort.name}`
-      : `Optimal refuel at ${bestPort.name}`;
+    !bestPort.reachable
+      ? `🚨 EMERGENCY: Insufficient fuel to reach ${bestPort.name} — request assistance`
+      : bestPort.fuelRisk > 0.5
+        ? `⚠️ URGENT: Refuel at ${bestPort.name} (${bestPort.distance} NM)`
+        : `✅ Optimal refuel at ${bestPort.name} (${bestPort.distance} NM)`;
 
   res.json({
     recommendedPort: bestPort.name,
     country: bestPort.country,
+    lat: bestPort.lat,
+    lng: bestPort.lng,
     distance: bestPort.distance,
     fuelPrice: bestPort.fuelPricePerTon,
+    portFees: bestPort.portFees,
     estimatedFuelNeeded: bestPort.estimatedFuelNeeded,
+    reachable: bestPort.reachable,
     recommendation,
-    allPorts: ports.map((p: any) => {
-      const d = calculateDistance(lat, lng, p.lat, p.lng);
-      return {
+    allPorts: allPortResults
+      .sort((a, b) => a.distance - b.distance)
+      .map((p) => ({
         name: p.name,
         country: p.country,
-        distance: Math.round(d * 100) / 100,
+        lat: p.lat,
+        lng: p.lng,
+        distance: p.distance,
         fuelPrice: p.fuelPricePerTon,
         portFees: p.portFees,
-        estimatedFuelNeeded: Math.round(d * (fuelConsumptionRate || 10) * 100) / 100,
-        isRecommended: p.name === bestPort.name,
-      };
-    }),
+        estimatedFuelNeeded: p.estimatedFuelNeeded,
+        reachable: p.reachable,
+        isRecommended: bestPort ? p.name === bestPort.name : false,
+      })),
   });
 });
 
