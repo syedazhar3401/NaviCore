@@ -4,14 +4,15 @@ const NAV_ITEMS = [
   { id: 'fleet', icon: '🗺️', label: 'Fleet Map', section: 'OVERVIEW' },
   { id: 'voyage', icon: '⚓', label: 'Voyage Overview', section: 'OVERVIEW' },
   { id: 'weather', icon: '🌊', label: 'Weather & Risk', section: 'INTELLIGENCE' },
+  { id: 'fuel', icon: '⛽', label: 'Fuel Stop Optimizer', section: 'INTELLIGENCE' },
+  { id: 'news', icon: '📰', label: 'Maritime News', section: 'INTELLIGENCE' },
   { id: 'cost', icon: '💰', label: 'Cost Ledger', section: 'OPERATIONS' },
   { id: 'cargo', icon: '🧠', label: 'AI Cargo Optimizer', section: 'OPERATIONS' },
-  { id: 'fuel', icon: '⛽', label: 'Fuel Stop Optimizer', section: 'INTELLIGENCE' },
   { id: 'feed', icon: '📡', label: 'Loading Feed', section: 'LIVE' },
   { id: 'crew', icon: '👥', label: 'Crew Roster', section: 'LIVE' },
 ]
 
-export default function Sidebar({ activeView, onNavigate, feedEvents }) {
+export default function Sidebar({ activeView, onNavigate, feedEvents, connectionStatus }) {
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {
@@ -20,6 +21,15 @@ export default function Sidebar({ activeView, onNavigate, feedEvents }) {
   }, [])
 
   const sections = [...new Set(NAV_ITEMS.map(i => i.section))]
+
+  const statusConfig = {
+    connected: { class: 'dot-green', text: 'All Systems Operational', bg: 'rgba(0, 230, 118, 0.06)', color: 'var(--green-signal)' },
+    disconnected: { class: 'dot-red', text: 'Connection Lost', bg: 'rgba(255, 61, 61, 0.06)', color: 'var(--red-alert)' },
+    reconnecting: { class: 'dot-amber', text: 'Reconnecting…', bg: 'rgba(240, 180, 41, 0.06)', color: 'var(--amber-warn)' },
+    connecting: { class: 'dot-cyan', text: 'Connecting…', bg: 'rgba(0, 212, 255, 0.06)', color: 'var(--cyan-glow)' },
+  }
+
+  const status = statusConfig[connectionStatus] || statusConfig.connecting
 
   return (
     <aside className="sidebar">
@@ -33,9 +43,9 @@ export default function Sidebar({ activeView, onNavigate, feedEvents }) {
         </div>
       </div>
 
-      <div className="sidebar-status">
-        <span className="dot dot-green pulse" style={{ width: 8, height: 8, minWidth: 8 }}></span>
-        All Systems Operational
+      <div className="sidebar-status" style={{ background: status.bg, color: status.color }}>
+        <span className={`dot ${status.class} pulse`} style={{ width: 8, height: 8, minWidth: 8 }}></span>
+        {status.text}
       </div>
 
       <nav className="sidebar-nav">
