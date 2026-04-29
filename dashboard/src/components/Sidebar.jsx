@@ -7,7 +7,7 @@ const NAV_ITEMS = [
   { id: 'fuel', icon: '⛽', label: 'Fuel Stop Optimizer', section: 'INTELLIGENCE' },
   { id: 'news', icon: '📰', label: 'Maritime News', section: 'INTELLIGENCE' },
   { id: 'cost', icon: '💰', label: 'Cost Ledger', section: 'OPERATIONS' },
-  { id: 'cargo', icon: '🧠', label: 'AI Cargo Optimizer', section: 'OPERATIONS' },
+  { id: 'arrangement', icon: '📦', label: 'Cargo Arrangement', section: 'OPERATIONS' },
   { id: 'feed', icon: '📡', label: 'Loading Feed', section: 'LIVE' },
   { id: 'crew', icon: '👥', label: 'Crew Roster', section: 'LIVE' },
 ]

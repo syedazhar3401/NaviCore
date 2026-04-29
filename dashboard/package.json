@@ -9,14 +9,20 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.4",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.12",
+    "tailwindcss": "^4.2.4",
     "typescript": "~6.0.2",
     "vite": "^8.0.4"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.1",
     "leaflet": "^1.9.4",
+    "lucide-react": "^1.12.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "simplex-noise": "^4.0.3",
     "socket.io-client": "^4.8.3"
   }
 }

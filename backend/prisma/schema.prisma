@@ -52,6 +52,17 @@ model CargoItem {
   owner           String
   qrCode          String   @unique
   loadStatus      String   @default("MANIFESTED") // MANIFESTED, LOADED, SECURED, OFFLOADED, DAMAGED
+
+  // ── NEW ARRANGEMENT FIELDS ──
+  cargoId         String   @default("")      // "CARGO-0001"
+  label           String   @default("")      // "Steel Coils – Lot A"
+  type            String   @default("STANDARD")  // STANDARD | REFRIGERATED | HAZMAT | LIQUID_BULK
+  lengthM         Float    @default(6.1)
+  widthM          Float    @default(2.4)
+  heightM         Float    @default(2.6)
+  hazardClass     String   @default("NONE") // NONE | FLAMMABLE | TOXIC | EXPLOSIVE | CORROSIVE
+  deckSlotId      String?                   // "B3-R2-C4" — null = unplaced
+  notes           String?
 }
 
 model CrewMember {
