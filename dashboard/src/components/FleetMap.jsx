@@ -4,7 +4,9 @@ import { DeckGL } from 'deck.gl'
 import { useTradeRoutesLayers } from './TradeRoutesLayer'
 import { useAisLayers } from './AisLayer'
 import { usePortsLayers } from './PortsLayer'
+import { useWeatherLayers } from './WeatherLayer'
 import { fetchAisSignals, getAisStatus, startAisPolling, stopAisPolling } from '@/services/ais'
+import { fetchWeatherAlerts, getWeatherStatus, startWeatherPolling, stopWeatherPolling } from '@/services/weather'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
@@ -22,8 +24,10 @@ export default function FleetMap() {
   const [showPorts, setShowPorts] = useState(true)
   const [showAisDensity, setShowAisDensity] = useState(true)
   const [showAisDisruptions, setShowAisDisruptions] = useState(true)
+  const [showWeather, setShowWeather] = useState(true)
   const [aisDensity, setAisDensity] = useState([])
   const [aisDisruptions, setAisDisruptions] = useState([])
+  const [weatherAlerts, setWeatherAlerts] = useState([])
   const [aisStatus, setAisStatus] = useState({ connected: false, vessels: 0, messages: 0 })
 
   // Load AIS data
@@ -49,6 +53,21 @@ export default function FleetMap() {
     }
   }, [])
 
+  // Load Weather data
+  useEffect(() => {
+    const loadWeather = async () => {
+      const alerts = await fetchWeatherAlerts()
+      setWeatherAlerts(alerts)
+    }
+
+    loadWeather()
+    startWeatherPolling()
+
+    return () => {
+      stopWeatherPolling()
+    }
+  }, [])
+
   const { layers: tradeRouteLayers } = useTradeRoutesLayers({
     visible: showRoutes,
     animationEnabled: showRoutes,
@@ -67,7 +86,13 @@ export default function FleetMap() {
     showLabels: true,
   })
 
-  const allLayers = [...tradeRouteLayers, ...aisLayers, ...portsLayers]
+  const weatherLayers = useWeatherLayers({
+    alerts: weatherAlerts,
+    showCentroids: showWeather,
+    showPolygons: showWeather,
+  })
+
+  const allLayers = [...tradeRouteLayers, ...aisLayers, ...portsLayers, ...weatherLayers]
 
   const getTooltip = useCallback(({ object }) => {
     if (!object) return null
@@ -123,6 +148,21 @@ Country: ${object.country}
 Type: ${object.type}
 ${object.rank ? `Rank: #${object.rank} globally` : ''}
 ${object.note || ''}`,
+      }
+    }
+
+    // Weather Alert
+    if (object.event !== undefined) {
+      const expiresText = object.expires ? 
+        `Expires: ${new Date(object.expires).toLocaleString()}` : '';
+      return {
+        text: `${object.event}
+Severity: ${object.severity}
+${object.headline}
+Area: ${object.areaDesc}
+${expiresText}
+
+${object.description ? object.description.substring(0, 150) + (object.description.length > 150 ? '...' : '') : ''}`,
       }
     }
 
@@ -183,6 +223,10 @@ ${object.note || ''}`,
             <span className="legend-line" style={{ background: '#64c8ff', height: '2px' }}></span>
             <span>Trade Route</span>
           </div>
+          <div className="legend-item">
+            <span className="legend-dot" style={{ background: '#ff0000' }}></span>
+            <span>Weather Alert</span>
+          </div>
         </div>
       </div>
 
@@ -225,6 +269,16 @@ ${object.note || ''}`,
         >
           <span className="neon-glow-top"></span>
           Disruptions
+          <span className="neon-glow-bottom"></span>
+        </button>
+
+        <button
+          className={`neon-toggle-btn ${showWeather ? 'active' : ''}`}
+          onClick={() => setShowWeather(v => !v)}
+          title={showWeather ? 'Hide weather alerts' : 'Show weather alerts'}
+        >
+          <span className="neon-glow-top"></span>
+          Weather
           <span className="neon-glow-bottom"></span>
         </button>
       </div>
