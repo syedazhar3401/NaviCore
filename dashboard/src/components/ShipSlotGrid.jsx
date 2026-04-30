@@ -7,6 +7,7 @@ const ShipSlotGrid = ({
   selectedCargoId, 
   selectedSlotId,
   proposedSlots,
+  pendingPlacement,
   onSlotClick,
   imageUrl = '/ship/ship-overhead.png'
 }) => {
@@ -57,7 +58,10 @@ const ShipSlotGrid = ({
           const slotInfo = SLOT_MAP[slotId];
           const occupyingCargo = slotCargoMap[slotId];
           const color = slotColors?.[slotId] || 'blue';
-          const isProposed = proposedSlots?.[slotId];
+          const proposedCargoId = proposedSlots?.[slotId];
+          const proposedCargoExists = proposedCargoId && cargo.some((c) => c.id === proposedCargoId);
+          const isProposed = !!proposedCargoExists && !occupyingCargo;
+          const isPendingTarget = pendingPlacement?.toSlotId === slotId;
           const isSelected = selectedSlotId === slotId;
           const isOccupied = !!occupyingCargo;
 
@@ -70,6 +74,7 @@ const ShipSlotGrid = ({
               cargo={occupyingCargo}
               color={color}
               isProposed={isProposed}
+              isPendingTarget={isPendingTarget}
               isSelected={isSelected}
               isOccupied={isOccupied}
               selectedCargoId={selectedCargoId}
@@ -105,11 +110,12 @@ const Slot = ({
   yPct, 
   cargo, 
   color, 
-  isProposed, 
-  isSelected, 
+  isProposed,
+  isPendingTarget,
+  isSelected,
   isOccupied,
   selectedCargoId,
-  onClick 
+  onClick
 }) => {
   const size = CONTAINER_SIZE;
   
@@ -125,6 +131,11 @@ const Slot = ({
   if (isOccupied) {
     opacity = 1;
     borderColor = 'transparent';
+  } else if (isPendingTarget) {
+    opacity = 0.85;
+    borderStyle = 'dashed';
+    borderColor = '#00d4ff';
+    boxShadow = '0 0 14px rgba(0,212,255,0.5)';
   } else if (isProposed) {
     opacity = 0.7;
     borderStyle = 'dashed';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Cpu } from 'lucide-react';
+import { Package, Cpu, RotateCcw } from 'lucide-react';
 
 const TYPE_COLORS = {
   STANDARD: '#00d4ff',
@@ -14,7 +14,9 @@ const CargoManifestPanel = ({
   onSelectCargo, 
   onAddCargo, 
   onAIOptimize,
-  isOptimizing 
+  onResetAllCargo,
+  isOptimizing,
+  isResetDisabled,
 }) => {
   const placedCargo = cargo.filter(c => c.deckSlotId);
   const unplacedCargo = cargo.filter(c => !c.deckSlotId);
@@ -71,15 +73,15 @@ const CargoManifestPanel = ({
               justifyContent: 'center',
               gap: '6px',
               padding: '10px',
-              backgroundColor: isOptimizing || unplacedCargo.length === 0 
-                ? 'rgba(255,255,255,0.1)' 
+              backgroundColor: isOptimizing || unplacedCargo.length === 0
+                ? 'rgba(255,255,255,0.1)'
                 : 'rgba(156,39,176,0.3)',
-              border: `1px solid ${isOptimizing || unplacedCargo.length === 0 
-                ? 'rgba(255,255,255,0.2)' 
+              border: `1px solid ${isOptimizing || unplacedCargo.length === 0
+                ? 'rgba(255,255,255,0.2)'
                 : '#9c27b0'}`,
               borderRadius: '6px',
-              color: isOptimizing || unplacedCargo.length === 0 
-                ? 'var(--text-secondary)' 
+              color: isOptimizing || unplacedCargo.length === 0
+                ? 'var(--text-secondary)'
                 : '#e1bee7',
               cursor: isOptimizing || unplacedCargo.length === 0 ? 'not-allowed' : 'pointer',
               fontSize: '13px',
@@ -87,6 +89,31 @@ const CargoManifestPanel = ({
           >
             <Cpu size={16} />
             {isOptimizing ? 'Optimizing...' : 'AI Optimize'}
+          </button>
+          <button
+            onClick={onResetAllCargo}
+            disabled={isResetDisabled}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '10px',
+              backgroundColor: isResetDisabled
+                ? 'rgba(255,255,255,0.1)'
+                : 'rgba(255,152,0,0.2)',
+              border: `1px solid ${isResetDisabled
+                ? 'rgba(255,255,255,0.2)'
+                : 'rgba(255,152,0,0.7)'}`,
+              borderRadius: '6px',
+              color: isResetDisabled ? 'var(--text-secondary)' : '#ffd180',
+              cursor: isResetDisabled ? 'not-allowed' : 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            <RotateCcw size={16} />
+            Reset
           </button>
         </div>
       </div>

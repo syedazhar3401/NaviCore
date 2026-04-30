@@ -23,6 +23,7 @@ const CargoArrangement = () => {
   const [editingCargo, setEditingCargo] = useState(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [pendingPlacement, setPendingPlacement] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -86,6 +87,18 @@ const CargoArrangement = () => {
     }
   };
 
+  const clearProposalArtifacts = useCallback((prevMap, cargoId, slotIds = []) => {
+    const nextMap = {};
+
+    Object.entries(prevMap || {}).forEach(([slotKey, proposedCargoId]) => {
+      if (proposedCargoId === cargoId) return;
+      if (slotIds.includes(slotKey)) return;
+      nextMap[slotKey] = proposedCargoId;
+    });
+
+    return nextMap;
+  }, []);
+
   const handleAddCargo = () => {
     setEditingCargo(null);
     setIsModalOpen(true);
@@ -124,15 +137,24 @@ const CargoArrangement = () => {
 
   const handleDeleteCargo = async (id) => {
     if (!confirm('Are you sure you want to delete this cargo?')) return;
-    
+
+    const cargoToDelete = cargo.find(c => c.id === id);
+
     try {
       await fetch(`${BACKEND_URL}/api/arrangement/cargo/${id}`, {
         method: 'DELETE',
       });
       setCargo(prev => prev.filter(c => c.id !== id));
+      setProposedSlots(prev => clearProposalArtifacts(prev, id, cargoToDelete?.deckSlotId ? [cargoToDelete.deckSlotId] : []));
+
       if (selectedCargoId === id) {
         setSelectedCargoId(null);
+        setSelectedSlotId(null);
       }
+      if (pendingPlacement?.cargoId === id) {
+        setPendingPlacement(null);
+      }
+      setHasUnsavedChanges(true);
     } catch (err) {
       console.error('Failed to delete cargo:', err);
     }
@@ -141,39 +163,100 @@ const CargoArrangement = () => {
   const handleCargoSelect = (cargoId) => {
     setSelectedCargoId(cargoId);
     setSelectedSlotId(null);
+    setPendingPlacement(prev => (prev && prev.cargoId !== cargoId ? null : prev));
   };
 
   const handleSlotClick = (slotId) => {
     const selectedCargo = cargo.find(c => c.id === selectedCargoId);
-    
-    if (selectedCargo && !selectedCargo.deckSlotId) {
-      // Place cargo in slot
-      setCargo(prev => prev.map(c => 
-        c.id === selectedCargoId 
-          ? { ...c, deckSlotId: slotId, loadStatus: 'LOADED' }
-          : c
-      ));
-      setHasUnsavedChanges(true);
-      setSelectedCargoId(null);
-    } else {
-      // Just select the slot
-      setSelectedSlotId(slotId);
-      // Find cargo in this slot
-      const cargoInSlot = cargo.find(c => c.deckSlotId === slotId);
-      if (cargoInSlot) {
+    const cargoInSlot = cargo.find(c => c.deckSlotId === slotId);
+
+    if (selectedCargo) {
+      // Cannot place onto an occupied slot unless it's the same cargo already there
+      if (cargoInSlot && cargoInSlot.id !== selectedCargo.id) {
+        setSelectedSlotId(slotId);
         setSelectedCargoId(cargoInSlot.id);
+        setPendingPlacement(null);
+        return;
       }
+
+      const fromSlotId = selectedCargo.deckSlotId || null;
+
+      // Clicking current slot simply selects it
+      if (fromSlotId === slotId) {
+        setSelectedSlotId(slotId);
+        setPendingPlacement(null);
+        return;
+      }
+
+      setPendingPlacement({
+        cargoId: selectedCargo.id,
+        fromSlotId,
+        toSlotId: slotId,
+        mode: fromSlotId ? 'move' : 'add',
+      });
+      setSelectedSlotId(slotId);
+      return;
+    }
+
+    // No selected cargo: select slot and cargo in it (if any)
+    setSelectedSlotId(slotId);
+    if (cargoInSlot) {
+      setSelectedCargoId(cargoInSlot.id);
     }
   };
 
+  const handleConfirmPlacement = () => {
+    if (!pendingPlacement?.cargoId || !pendingPlacement?.toSlotId) return;
+
+    const { cargoId, fromSlotId, toSlotId } = pendingPlacement;
+
+    setCargo(prev => prev.map(c => (
+      c.id === cargoId
+        ? { ...c, deckSlotId: toSlotId, loadStatus: 'LOADED' }
+        : c
+    )));
+    setProposedSlots(prev => clearProposalArtifacts(prev, cargoId, [fromSlotId, toSlotId].filter(Boolean)));
+    setHasUnsavedChanges(true);
+    setSelectedCargoId(cargoId);
+    setSelectedSlotId(toSlotId);
+    setPendingPlacement(null);
+  };
+
+  const handleCancelPlacement = () => {
+    setSelectedSlotId(pendingPlacement?.fromSlotId || null);
+    setPendingPlacement(null);
+  };
+
   const handleRemoveFromSlot = (cargoId) => {
-    setCargo(prev => prev.map(c => 
-      c.id === cargoId 
+    const cargoItem = cargo.find(c => c.id === cargoId);
+    const removedFromSlot = cargoItem?.deckSlotId;
+
+    setCargo(prev => prev.map(c => (
+      c.id === cargoId
         ? { ...c, deckSlotId: null, loadStatus: 'MANIFESTED' }
         : c
-    ));
+    )));
+    setProposedSlots(prev => clearProposalArtifacts(prev, cargoId, removedFromSlot ? [removedFromSlot] : []));
+    setPendingPlacement(prev => (prev?.cargoId === cargoId ? null : prev));
     setHasUnsavedChanges(true);
+    setSelectedCargoId(cargoId);
+    setSelectedSlotId(null);
+  };
+
+  const handleResetAllCargo = () => {
+    if (!cargo.length) return;
+    if (!confirm('Unload all cargo and reset all slot assignments?')) return;
+
+    setCargo(prev => prev.map(c => ({
+      ...c,
+      deckSlotId: null,
+      loadStatus: 'MANIFESTED',
+    })));
     setSelectedCargoId(null);
+    setSelectedSlotId(null);
+    setPendingPlacement(null);
+    setProposedSlots({});
+    setHasUnsavedChanges(true);
   };
 
   const handleAIOptimize = async () => {
@@ -184,49 +267,77 @@ const CargoArrangement = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ voyageId: selectedVoyageId }),
       });
+
       const data = await res.json();
-      
+      if (!res.ok) {
+        throw new Error(data?.error || `AI optimization failed (HTTP ${res.status})`);
+      }
+
+      const proposals = Array.isArray(data?.proposed) ? data.proposed : [];
+
       // Convert proposed array to slot map
       const proposedMap = {};
-      data.proposed.forEach(p => {
+      proposals.forEach((p) => {
         proposedMap[p.deckSlotId] = p.cargoId;
       });
       setProposedSlots(proposedMap);
-      
+
       // Apply proposed layout to cargo state
-      setCargo(prev => prev.map(c => {
-        const proposal = data.proposed.find(p => p.cargoId === c.id);
+      setCargo(prev => prev.map((c) => {
+        const proposal = proposals.find((p) => p.cargoId === c.id);
         if (proposal) {
           return { ...c, deckSlotId: proposal.deckSlotId, loadStatus: 'LOADED' };
         }
         return c;
       }));
-      setHasUnsavedChanges(true);
+
+      const unassignedCount = typeof data?.unassigned === 'number'
+        ? data.unassigned
+        : (data?.unassigned?.count || 0);
+
+      if (unassignedCount > 0) {
+        alert(`AI optimize placed what fits. ${unassignedCount} cargo item(s) could not be assigned due to slot limits.`);
+      }
+
+      setPendingPlacement(null);
+      setHasUnsavedChanges(proposals.length > 0);
     } catch (err) {
       console.error('AI optimization failed:', err);
+      alert(err.message || 'AI optimization failed');
     } finally {
       setIsOptimizing(false);
     }
   };
 
   const handleSaveLayout = async () => {
+    if (pendingPlacement) {
+      alert('Confirm or cancel the pending move before saving.');
+      return;
+    }
+
     try {
       const slots = cargo.map(c => ({
         cargoId: c.id,
         deckSlotId: c.deckSlotId || null,
       }));
-      
-      await fetch(`${BACKEND_URL}/api/arrangement/layout`, {
+
+      const res = await fetch(`${BACKEND_URL}/api/arrangement/layout`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slots }),
       });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+
       setHasUnsavedChanges(false);
       setProposedSlots({});
       alert('Layout saved successfully!');
     } catch (err) {
       console.error('Failed to save layout:', err);
-      alert('Failed to save layout');
+      alert(err.message || 'Failed to save layout');
     }
   };
 
@@ -235,7 +346,9 @@ const CargoArrangement = () => {
       fetchCargo(selectedVoyageId);
       setHasUnsavedChanges(false);
       setProposedSlots({});
+      setPendingPlacement(null);
       setSelectedCargoId(null);
+      setSelectedSlotId(null);
     }
   };
 
@@ -343,7 +456,9 @@ const CargoArrangement = () => {
               onSelectCargo={handleCargoSelect}
               onAddCargo={handleAddCargo}
               onAIOptimize={handleAIOptimize}
+              onResetAllCargo={handleResetAllCargo}
               isOptimizing={isOptimizing}
+              isResetDisabled={cargo.length === 0 || cargo.every(c => !c.deckSlotId)}
             />
           </div>
 
@@ -370,6 +485,7 @@ const CargoArrangement = () => {
                 selectedCargoId={selectedCargoId}
                 selectedSlotId={selectedSlotId}
                 proposedSlots={proposedSlots}
+                pendingPlacement={pendingPlacement}
                 onSlotClick={handleSlotClick}
               />
             )}
@@ -385,17 +501,17 @@ const CargoArrangement = () => {
             }}>
               <button
                 onClick={handleSaveLayout}
-                disabled={!hasUnsavedChanges}
+                disabled={!hasUnsavedChanges || !!pendingPlacement}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
                   padding: '12px 24px',
-                  backgroundColor: hasUnsavedChanges ? 'var(--cyan-glow)' : 'rgba(255,255,255,0.1)',
+                  backgroundColor: hasUnsavedChanges && !pendingPlacement ? 'var(--cyan-glow)' : 'rgba(255,255,255,0.1)',
                   border: 'none',
                   borderRadius: '8px',
-                  color: hasUnsavedChanges ? '#000' : 'var(--text-secondary)',
-                  cursor: hasUnsavedChanges ? 'pointer' : 'not-allowed',
+                  color: hasUnsavedChanges && !pendingPlacement ? '#000' : 'var(--text-secondary)',
+                  cursor: hasUnsavedChanges && !pendingPlacement ? 'pointer' : 'not-allowed',
                   fontSize: '14px',
                   fontWeight: 'bold',
                 }}
@@ -480,10 +596,13 @@ const CargoArrangement = () => {
             </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
               <CargoDetailPanel
-              cargo={selectedCargo}
-              onEdit={handleEditCargo}
-              onDelete={handleDeleteCargo}
-              onRemoveFromSlot={handleRemoveFromSlot}
+                cargo={selectedCargo}
+                pendingPlacement={pendingPlacement}
+                onEdit={handleEditCargo}
+                onDelete={handleDeleteCargo}
+                onRemoveFromSlot={handleRemoveFromSlot}
+                onConfirmPlacement={handleConfirmPlacement}
+                onCancelPlacement={handleCancelPlacement}
               />
             </div>
           </div>

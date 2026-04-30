@@ -16,7 +16,15 @@ const HAZARD_COLORS = {
   CORROSIVE: '#795548',
 };
 
-const CargoDetailPanel = ({ cargo, onEdit, onDelete, onRemoveFromSlot }) => {
+const CargoDetailPanel = ({
+  cargo,
+  pendingPlacement,
+  onEdit,
+  onDelete,
+  onRemoveFromSlot,
+  onConfirmPlacement,
+  onCancelPlacement,
+}) => {
   if (!cargo) {
     return (
       <div style={{
@@ -30,6 +38,7 @@ const CargoDetailPanel = ({ cargo, onEdit, onDelete, onRemoveFromSlot }) => {
   }
 
   const isPlaced = !!cargo.deckSlotId;
+  const pendingForCargo = pendingPlacement?.cargoId === cargo.id ? pendingPlacement : null;
 
   return (
     <div style={{ padding: '20px' }}>
@@ -133,6 +142,58 @@ const CargoDetailPanel = ({ cargo, onEdit, onDelete, onRemoveFromSlot }) => {
                 title="Remove from slot"
               >
                 ✕
+              </button>
+            </div>
+          </div>
+        )}
+
+        {pendingForCargo?.toSlotId && (
+          <div style={{
+            marginTop: '8px',
+            padding: '12px',
+            backgroundColor: 'rgba(0,212,255,0.1)',
+            border: '1px solid rgba(0,212,255,0.35)',
+            borderRadius: '6px',
+            display: 'grid',
+            gap: '10px',
+          }}>
+            <div style={{ color: 'white', fontSize: '12px', lineHeight: 1.4 }}>
+              Pending {pendingForCargo.mode === 'move' ? 'move' : 'placement'}:{' '}
+              <span style={{ color: 'var(--cyan-glow)', fontFamily: 'monospace' }}>
+                {pendingForCargo.fromSlotId || 'UNPLACED'} → {pendingForCargo.toSlotId}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={onConfirmPlacement}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  backgroundColor: 'var(--cyan-glow)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#000',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                }}
+              >
+                Confirm
+              </button>
+              <button
+                onClick={onCancelPlacement}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  backgroundColor: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.35)',
+                  borderRadius: '6px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                }}
+              >
+                Cancel
               </button>
             </div>
           </div>

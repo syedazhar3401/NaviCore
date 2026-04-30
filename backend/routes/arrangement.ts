@@ -302,25 +302,23 @@ router.post('/arrangement/ai-optimize', async (req, res) => {
     // This ensures heaviest cargo gets the most desirable slots (lowest, centered)
     const sortedCargo = [...unplacedCargo].sort((a, b) => b.weightKg - a.weightKg);
 
-    // Safety check
-    if (sortedCargo.length > availableOptimalSlots.length) {
-      return res.status(400).json({
-        error: `Ship Overcapacity! Trying to load ${sortedCargo.length} containers into ${availableOptimalSlots.length} available slots.`
-      });
-    }
-
-    // Assign cargo to slots sequentially
+    // Assign cargo to slots sequentially (best-effort)
     const proposed: { cargoId: string; deckSlotId: string }[] = [];
 
-    for (let i = 0; i < sortedCargo.length; i++) {
+    const assignableCount = Math.min(sortedCargo.length, availableOptimalSlots.length);
+
+    for (let i = 0; i < assignableCount; i++) {
       const cargoItem = sortedCargo[i];
       const assignedSlot = availableOptimalSlots[i];
+      if (!cargoItem || !assignedSlot) continue;
 
       proposed.push({
         cargoId: cargoItem.id,
-        deckSlotId: assignedSlot
+        deckSlotId: assignedSlot,
       });
     }
+
+    const unassignedCargo = sortedCargo.slice(assignableCount);
 
     // Calculate final balance statistics
     const getSideWeights = () => {
@@ -351,9 +349,17 @@ router.post('/arrangement/ai-optimize', async (req, res) => {
     await new Promise(r => setTimeout(r, 600));
 
     res.json({
-      status: 'success',
+      status: unassignedCargo.length > 0 ? 'partial_success' : 'success',
       proposed,
-      unassigned: sortedCargo.length - proposed.length,
+      unassigned: {
+        count: unassignedCargo.length,
+        cargo: unassignedCargo.map((item) => ({
+          id: item.id,
+          cargoId: item.cargoId,
+          label: item.label,
+          weightKg: item.weightKg,
+        })),
+      },
       balance: {
         portWeight: finalWeights.port,
         starboardWeight: finalWeights.starboard,
@@ -371,7 +377,8 @@ router.post('/arrangement/ai-optimize', async (req, res) => {
       loadingSequence: {
         totalSlots: optimalSlots.length,
         availableSlots: availableOptimalSlots.length,
-        cargoAssigned: proposed.length
+        cargoAssigned: proposed.length,
+        cargoUnassigned: unassignedCargo.length,
       }
     });
   } catch (err) {
