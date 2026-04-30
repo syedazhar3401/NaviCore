@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Map } from 'react-map-gl/maplibre'
+import { Map, Source, Layer } from 'react-map-gl/maplibre'
 import { DeckGL } from 'deck.gl'
 import { useTradeRoutesLayers } from './TradeRoutesLayer'
 import { useAisLayers } from './AisLayer'
@@ -7,6 +7,7 @@ import { usePortsLayers } from './PortsLayer'
 import { useWeatherLayers } from './WeatherLayer'
 import { fetchAisSignals, getAisStatus, hasAisData } from '@/services/ais'
 import { fetchWeatherAlerts, getWeatherStatus, hasWeatherData } from '@/services/weather'
+import { fetchRadarTiles } from '@/services/weatherRadar'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
@@ -28,6 +29,7 @@ export default function FleetMap() {
   const [aisDensity, setAisDensity] = useState([])
   const [aisDisruptions, setAisDisruptions] = useState([])
   const [weatherAlerts, setWeatherAlerts] = useState([])
+  const [radarTileUrl, setRadarTileUrl] = useState(null)
   const [aisStatus, setAisStatus] = useState({ connected: false, vessels: 0, messages: 0 })
 
   // Manual fetch function for AIS - only called when user toggles on
@@ -53,12 +55,17 @@ export default function FleetMap() {
     }
   }, [showAisDensity, showAisDisruptions, loadAisData])
 
-  // Handle Weather toggle - fetch only when turning on and data hasn't been fetched yet
+  // Handle Weather toggle - fetch alerts and radar when turning on
   useEffect(() => {
     if (showWeather) {
+      // Fetch alerts if not already loaded
       if (!hasWeatherData()) {
         loadWeatherData()
       }
+      // Fetch radar tiles
+      fetchRadarTiles().then(url => {
+        if (url) setRadarTileUrl(url)
+      })
     }
   }, [showWeather, loadWeatherData])
 
@@ -188,7 +195,27 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
         getTooltip={getTooltip}
         style={{ width: '100%', height: '100%' }}
       >
-        <Map mapStyle={MAP_STYLE} attributionControl={false} />
+        <Map mapStyle={MAP_STYLE} attributionControl={false}>
+          {/* Weather Radar Layer - RainViewer tiles */}
+          {showWeather && radarTileUrl && (
+            <Source
+              id="weather-radar"
+              type="raster"
+              tiles={[radarTileUrl]}
+              tileSize={256}
+              attribution="© RainViewer"
+            >
+              <Layer
+                id="weather-radar-layer"
+                type="raster"
+                paint={{
+                  'raster-opacity': 0.65,
+                  'raster-fade-duration': 500,
+                }}
+              />
+            </Source>
+          )}
+        </Map>
       </DeckGL>
       
       {/* Floating header - top left */}
@@ -236,6 +263,12 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
             <span className="legend-dot" style={{ background: '#ff0000' }}></span>
             <span>Weather Alert</span>
           </div>
+          {showWeather && (
+            <div className="legend-item">
+              <span className="legend-radar"></span>
+              <span>Radar</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -447,7 +480,15 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           border: 2px solid rgba(255,255,255,0.6);
           box-shadow: 0 0 6px rgba(0,0,0,0.5);
         }
-        
+
+        .legend-radar {
+          width: 12px;
+          height: 12px;
+          border-radius: 2px;
+          background: linear-gradient(135deg, #00b4db 0%, #0083b0 50%, #ffd700 100%);
+          border: 1px solid rgba(255,255,255,0.4);
+        }
+
         /* Toggle Buttons Row */
         .toggle-buttons-row {
           position: absolute;
