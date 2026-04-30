@@ -1,21 +1,17 @@
 import type { AisDisruptionEvent, AisDensityZone, AisStatus } from '@/types/ais';
 import { MOCK_AIS_DENSITY, MOCK_AIS_DISRUPTIONS } from '@/config/ais-mock-data';
 
-// Configuration
-const AIS_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+// For real API: AISStream endpoint (you need API key from aisstream.io)
+const AISSTREAM_API_KEY = import.meta.env.VITE_AISSTREAM_API_KEY || '';
 const USE_MOCK_DATA = true; // Set to false when you have real API
 
 // State
 let latestDisruptions: AisDisruptionEvent[] = [];
 let latestDensity: AisDensityZone[] = [];
-let isPolling = false;
-let pollInterval: ReturnType<typeof setInterval> | null = null;
-
-// For real API: AISStream endpoint (you need API key from aisstream.io)
-const AISSTREAM_API_KEY = import.meta.env.VITE_AISSTREAM_API_KEY || '';
+let hasFetched = false;
 
 /**
- * Initialize with mock data immediately
+ * Initialize with mock data
  */
 function initWithMockData(): void {
   latestDensity = [...MOCK_AIS_DENSITY];
@@ -23,39 +19,42 @@ function initWithMockData(): void {
 }
 
 /**
- * Start polling for AIS data
+ * Manually fetch AIS data - call this only when you want to refresh data
+ * This replaces the old auto-polling behavior
  */
-export function startAisPolling(): void {
-  if (isPolling) return;
-  
-  isPolling = true;
-  
+export async function fetchAisSignals(): Promise<{
+  disruptions: AisDisruptionEvent[];
+  density: AisDensityZone[];
+}> {
   if (USE_MOCK_DATA) {
+    console.log('[AIS] Using mock data');
     initWithMockData();
-    // Simulate small random changes to mock data
-    pollInterval = setInterval(() => {
-      latestDensity = MOCK_AIS_DENSITY.map(z => ({
-        ...z,
-        intensity: Math.min(1, Math.max(0.1, z.intensity + (Math.random() - 0.5) * 0.1)),
-        deltaPct: z.deltaPct + Math.round((Math.random() - 0.5) * 4),
-      }));
-    }, AIS_REFRESH_INTERVAL_MS);
   } else {
-    // Real API implementation would go here
-    fetchRealAisData();
-    pollInterval = setInterval(fetchRealAisData, AIS_REFRESH_INTERVAL_MS);
+    console.log('[AIS] Manually fetching AIS data...');
+    await fetchRealAisData();
   }
+  hasFetched = true;
+  return {
+    disruptions: latestDisruptions,
+    density: latestDensity,
+  };
 }
 
 /**
- * Stop polling
+ * Check if AIS data has been fetched at least once
  */
+export function hasAisData(): boolean {
+  return hasFetched;
+}
+
+// Deprecated: No longer used - manual fetch only
+export function startAisPolling(): void {
+  console.warn('[AIS] Auto-polling is disabled. Use fetchAisSignals() to manually fetch data.');
+}
+
+// Deprecated: No longer used - manual fetch only
 export function stopAisPolling(): void {
-  isPolling = false;
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    pollInterval = null;
-  }
+  // No-op - polling is disabled
 }
 
 /**
@@ -83,31 +82,15 @@ async function fetchRealAisData(): Promise<void> {
  */
 export function getAisStatus(): AisStatus {
   return {
-    connected: isPolling,
+    connected: hasFetched,
     vessels: latestDensity.reduce((sum, z) => sum + (z.shipsPerDay || 0), 0),
-    messages: isPolling ? Math.floor(Math.random() * 50000) + 10000 : 0,
-  };
-}
-
-/**
- * Fetch current AIS signals
- */
-export async function fetchAisSignals(): Promise<{ 
-  disruptions: AisDisruptionEvent[]; 
-  density: AisDensityZone[] 
-}> {
-  if (!isPolling) {
-    startAisPolling();
-  }
-  
-  return {
-    disruptions: latestDisruptions,
-    density: latestDensity,
+    messages: hasFetched ? Math.floor(Math.random() * 50000) + 10000 : 0,
   };
 }
 
 /**
  * For real-time vessel positions via WebSocket callback
+ * NOTE: Auto-polling is disabled. You must manually call fetchAisSignals() to get data.
  */
 export type AisPositionCallback = (data: {
   mmsi: string;
@@ -124,7 +107,7 @@ const positionCallbacks = new Set<AisPositionCallback>();
 
 export function registerAisCallback(callback: AisPositionCallback): void {
   positionCallbacks.add(callback);
-  startAisPolling();
+  // Auto-polling disabled - data will only update when fetchAisSignals() is called manually
 }
 
 export function unregisterAisCallback(callback: AisPositionCallback): void {

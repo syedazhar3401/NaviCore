@@ -27,14 +27,19 @@ export function useWeatherLayers({
   const centroidLayer = useMemo(() => {
     if (!showCentroids || alertsWithCoords.length === 0) return null;
 
+    console.log(`[WeatherLayer] Rendering ${alertsWithCoords.length} weather centroids`);
+
     return new ScatterplotLayer<WeatherAlert>({
       id: 'weather-centroids-layer',
       data: alertsWithCoords,
       getPosition: d => d.centroid as [number, number],
-      getRadius: 25000,
+      getRadius: 50000, // Larger radius for visibility
       getFillColor: d => getSeverityColorRGBA(d.severity),
-      radiusMinPixels: 8,
-      radiusMaxPixels: 20,
+      getLineColor: [255, 255, 255, 200],
+      stroked: true,
+      lineWidthMinPixels: 2,
+      radiusMinPixels: 10, // Larger minimum size
+      radiusMaxPixels: 30,
       pickable: true,
     });
   }, [alertsWithCoords, showCentroids]);

@@ -5,8 +5,8 @@ import { useTradeRoutesLayers } from './TradeRoutesLayer'
 import { useAisLayers } from './AisLayer'
 import { usePortsLayers } from './PortsLayer'
 import { useWeatherLayers } from './WeatherLayer'
-import { fetchAisSignals, getAisStatus, startAisPolling, stopAisPolling } from '@/services/ais'
-import { fetchWeatherAlerts, getWeatherStatus, startWeatherPolling, stopWeatherPolling } from '@/services/weather'
+import { fetchAisSignals, getAisStatus, hasAisData } from '@/services/ais'
+import { fetchWeatherAlerts, getWeatherStatus, hasWeatherData } from '@/services/weather'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
@@ -22,50 +22,52 @@ const INITIAL_VIEW = {
 export default function FleetMap() {
   const [showRoutes, setShowRoutes] = useState(true)
   const [showPorts, setShowPorts] = useState(true)
-  const [showAisDensity, setShowAisDensity] = useState(true)
-  const [showAisDisruptions, setShowAisDisruptions] = useState(true)
-  const [showWeather, setShowWeather] = useState(true)
+  const [showAisDensity, setShowAisDensity] = useState(false) // Default off - manual fetch only
+  const [showAisDisruptions, setShowAisDisruptions] = useState(false) // Default off - manual fetch only
+  const [showWeather, setShowWeather] = useState(false) // Default off - manual fetch only
   const [aisDensity, setAisDensity] = useState([])
   const [aisDisruptions, setAisDisruptions] = useState([])
   const [weatherAlerts, setWeatherAlerts] = useState([])
   const [aisStatus, setAisStatus] = useState({ connected: false, vessels: 0, messages: 0 })
 
-  // Load AIS data
-  useEffect(() => {
-    const loadData = async () => {
-      const { disruptions, density } = await fetchAisSignals()
-      setAisDisruptions(disruptions)
-      setAisDensity(density)
-      setAisStatus(getAisStatus())
-    }
-
-    loadData()
-    startAisPolling()
-
-    // Refresh status every 10 seconds
-    const interval = setInterval(() => {
-      setAisStatus(getAisStatus())
-    }, 10000)
-
-    return () => {
-      stopAisPolling()
-      clearInterval(interval)
-    }
+  // Manual fetch function for AIS - only called when user toggles on
+  const loadAisData = useCallback(async () => {
+    const { disruptions, density } = await fetchAisSignals()
+    setAisDisruptions(disruptions)
+    setAisDensity(density)
+    setAisStatus(getAisStatus())
   }, [])
 
-  // Load Weather data
+  // Manual fetch function for Weather - only called when user toggles on
+  const loadWeatherData = useCallback(async () => {
+    const alerts = await fetchWeatherAlerts()
+    setWeatherAlerts(alerts)
+  }, [])
+
+  // Handle AIS toggle - fetch only when turning on and data hasn't been fetched yet
   useEffect(() => {
-    const loadWeather = async () => {
-      const alerts = await fetchWeatherAlerts()
-      setWeatherAlerts(alerts)
+    if (showAisDensity || showAisDisruptions) {
+      if (!hasAisData()) {
+        loadAisData()
+      }
     }
+  }, [showAisDensity, showAisDisruptions, loadAisData])
 
-    loadWeather()
-    startWeatherPolling()
-
-    return () => {
-      stopWeatherPolling()
+  // Handle Weather toggle - fetch only when turning on and data hasn't been fetched yet
+  useEffect(() => {
+    if (showWeather) {
+      if (!hasWeatherData()) {
+        loadWeatherData()
+      }
     }
+  }, [showWeather, loadWeatherData])
+
+  // Periodic status update (every 30 seconds instead of 10)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAisStatus(getAisStatus())
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   const { layers: tradeRouteLayers } = useTradeRoutesLayers({
@@ -86,10 +88,17 @@ export default function FleetMap() {
     showLabels: true,
   })
 
+  // Debug logging
+  useEffect(() => {
+    if (weatherAlerts.length > 0) {
+      console.log('[FleetMap] Weather alerts loaded:', weatherAlerts.length)
+    }
+  }, [weatherAlerts])
+
   const weatherLayers = useWeatherLayers({
     alerts: weatherAlerts,
     showCentroids: showWeather,
-    showPolygons: showWeather,
+    showPolygons: false, // Disable polygons for now, just show centroids
   })
 
   const allLayers = [...tradeRouteLayers, ...aisLayers, ...portsLayers, ...weatherLayers]
@@ -254,8 +263,15 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
 
         <button
           className={`neon-toggle-btn ${showAisDensity ? 'active' : ''}`}
-          onClick={() => setShowAisDensity(v => !v)}
-          title={showAisDensity ? 'Hide AIS density' : 'Show AIS density'}
+          onClick={async (e) => {
+            if (showAisDensity && e.shiftKey) {
+              // Shift+Click to refresh data
+              await loadAisData()
+            } else {
+              setShowAisDensity(v => !v)
+            }
+          }}
+          title={showAisDensity ? 'Hide AIS density (Shift+Click to refresh)' : 'Show AIS density'}
         >
           <span className="neon-glow-top"></span>
           Ship Traffic
@@ -264,8 +280,15 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
 
         <button
           className={`neon-toggle-btn ${showAisDisruptions ? 'active' : ''}`}
-          onClick={() => setShowAisDisruptions(v => !v)}
-          title={showAisDisruptions ? 'Hide AIS disruptions' : 'Show AIS disruptions'}
+          onClick={async (e) => {
+            if (showAisDisruptions && e.shiftKey) {
+              // Shift+Click to refresh data
+              await loadAisData()
+            } else {
+              setShowAisDisruptions(v => !v)
+            }
+          }}
+          title={showAisDisruptions ? 'Hide AIS disruptions (Shift+Click to refresh)' : 'Show AIS disruptions'}
         >
           <span className="neon-glow-top"></span>
           Disruptions
@@ -274,8 +297,15 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
 
         <button
           className={`neon-toggle-btn ${showWeather ? 'active' : ''}`}
-          onClick={() => setShowWeather(v => !v)}
-          title={showWeather ? 'Hide weather alerts' : 'Show weather alerts'}
+          onClick={async (e) => {
+            if (showWeather && e.shiftKey) {
+              // Shift+Click to refresh data
+              await loadWeatherData()
+            } else {
+              setShowWeather(v => !v)
+            }
+          }}
+          title={showWeather ? 'Hide weather alerts (Shift+Click to refresh)' : 'Show weather alerts'}
         >
           <span className="neon-glow-top"></span>
           Weather
