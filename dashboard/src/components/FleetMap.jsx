@@ -194,7 +194,7 @@ ${object.note || ''}`,
           title={showPorts ? 'Hide ports' : 'Show ports'}
         >
           <span className="neon-glow-top"></span>
-          Ports (76)
+          Ports
           <span className="neon-glow-bottom"></span>
         </button>
 
