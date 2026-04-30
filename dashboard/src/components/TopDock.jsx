@@ -2,11 +2,11 @@ import { Anchor, Fuel, Map, Package, Radio, Users, Wallet, Waves } from 'lucide-
 
 const NAV_ITEMS = [
   { id: 'fleet', icon: Map, label: 'Fleet Map' },
+  { id: 'arrangement', icon: Package, label: 'Cargo Arrangement' },
   { id: 'voyage', icon: Anchor, label: 'Voyage Overview' },
   { id: 'weather', icon: Waves, label: 'Weather & Risk' },
   { id: 'fuel', icon: Fuel, label: 'Fuel Stop Optimizer' },
   { id: 'cost', icon: Wallet, label: 'Cost Ledger' },
-  { id: 'arrangement', icon: Package, label: 'Cargo Arrangement' },
   { id: 'feed', icon: Radio, label: 'Loading Feed' },
   { id: 'crew', icon: Users, label: 'Crew Roster' },
 ]
