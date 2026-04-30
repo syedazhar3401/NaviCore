@@ -1,177 +1,361 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { Map } from 'react-map-gl/maplibre'
+import { DeckGL } from 'deck.gl'
+import { useTradeRoutesLayers } from './TradeRoutesLayer'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
-// World map SVG path (simplified) + vessel coordinates mapped to SVG space
-const MAP_W = 1000
-const MAP_H = 500
+const MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
 
-// Rough equirectangular projection
-function latLngToSVG(lat, lng) {
-  const x = ((lng + 180) / 360) * MAP_W
-  const y = ((90 - lat) / 180) * MAP_H
-  return { x, y }
+const INITIAL_VIEW = {
+  longitude: 60,
+  latitude: 20,
+  zoom: 2.2,
+  pitch: 0,
+  bearing: 0,
 }
 
-const ROUTES = [
-  { from: { lat: 1.264, lng: 103.84 }, to: { lat: 51.949, lng: 4.144 } },
-]
+export default function FleetMap() {
+  const [showRoutes, setShowRoutes] = useState(true)
 
-const STATUS_COLORS = {
-  'IN_TRANSIT': 'var(--cyan-glow)',
-  'AT_PORT': 'var(--gold)',
-  'MAINTENANCE': 'var(--red-alert)',
-}
+  const { layers } = useTradeRoutesLayers({
+    visible: showRoutes,
+    animationEnabled: showRoutes,
+    showChokepoints: showRoutes,
+  })
 
-export default function FleetMap({ vessels, feedEvents }) {
-  const [hovered, setHovered] = useState(null)
+  const getTooltip = useCallback(({ object }) => {
+    if (!object) return null
+
+    if (object.routeId) {
+      // Trade route segment
+      return {
+        text: `${object.routeName}
+Category: ${object.category}
+Status: ${object.status}
+Volume: ${object.volumeDesc}`,
+      }
+    }
+
+    if (object.name) {
+      // Chokepoint
+      return {
+        text: `${object.name}
+${object.description}`,
+      }
+    }
+
+    return null
+  }, [])
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title font-display">Fleet Map</h1>
-          <p className="page-subtitle">Live vessel positions — updating every 3 seconds</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <span className="badge badge-green"><span className="dot dot-green"></span>Live Tracking</span>
-          <span className="badge badge-cyan">{vessels.length} Vessels</span>
-        </div>
+    <div className="fleet-map-fullscreen">
+      {/* Full-screen map container */}
+      <DeckGL
+        initialViewState={INITIAL_VIEW}
+        controller={true}
+        layers={layers}
+        getTooltip={getTooltip}
+        style={{ width: '100%', height: '100%' }}
+      >
+        <Map mapStyle={MAP_STYLE} attributionControl={false} />
+      </DeckGL>
+      
+      {/* Floating header - top left */}
+      <div className="map-overlay-header">
+        <h1 className="map-title">Global Maritime Intelligence</h1>
+        <p className="map-subtitle">Real-time threat monitoring and vessel tracking</p>
       </div>
-
-      <div className="fleet-layout">
-        {/* Map Panel */}
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600 }}>
-            <span>🌏</span> Indian Ocean — South Asia Region
+      
+      {/* Floating badges - top right */}
+      <div className="map-overlay-badges">
+        <span className="map-badge map-badge-green">
+          <span className="map-badge-dot"></span>
+          Live Tracking
+        </span>
+        <span className="map-badge map-badge-cyan">
+          21 Routes
+        </span>
+      </div>
+      
+      {/* Floating legend - bottom left */}
+      <div className="map-overlay-legend">
+        <span className="legend-label">LEGEND</span>
+        <div className="legend-items-row">
+          <div className="legend-item">
+            <span className="legend-line" style={{ background: '#64c8ff', height: '3px' }}></span>
+            <span>Container</span>
           </div>
-          <div className="map-container" style={{ height: 420, borderRadius: 0 }}>
-            <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} className="map-svg" style={{ background: 'var(--navy-900)' }}>
-              {/* Ocean grid lines */}
-              {Array.from({ length: 10 }, (_, i) => (
-                <line key={`h${i}`} x1={0} y1={i * 50} x2={MAP_W} y2={i * 50}
-                  stroke="rgba(0,212,255,0.04)" strokeWidth={1} />
-              ))}
-              {Array.from({ length: 20 }, (_, i) => (
-                <line key={`v${i}`} x1={i * 50} y1={0} x2={i * 50} y2={MAP_H}
-                  stroke="rgba(0,212,255,0.04)" strokeWidth={1} />
-              ))}
-
-              {/* Route lines */}
-              {ROUTES.map((r, i) => {
-                const from = latLngToSVG(r.from.lat, r.from.lng)
-                const to = latLngToSVG(r.to.lat, r.to.lng)
-                return (
-                  <line key={i} x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                    stroke="rgba(0,212,255,0.2)" strokeWidth={1.5} strokeDasharray="6,4" />
-                )
-              })}
-
-              {/* Port markers */}
-              {[
-                { name: 'Singapore', lat: 1.264, lng: 103.84 },
-                { name: 'Rotterdam', lat: 51.949, lng: 4.144 },
-                { name: 'Dubai', lat: 25.2, lng: 55.27 },
-              ].map(port => {
-                const pos = latLngToSVG(port.lat, port.lng)
-                return (
-                  <g key={port.name}>
-                    <circle cx={pos.x} cy={pos.y} r={5} fill="var(--gold)" opacity={0.9} />
-                    <text x={pos.x + 8} y={pos.y + 4} fill="var(--gold)" fontSize={10} fontFamily="Inter">{port.name}</text>
-                  </g>
-                )
-              })}
-
-              {/* Vessel markers */}
-              {vessels.map(v => {
-                const pos = latLngToSVG(v.currentLat, v.currentLng)
-                const color = STATUS_COLORS[v.status] || 'var(--text-secondary)'
-                return (
-                  <g key={v.id} className="vessel-marker"
-                    onMouseEnter={() => setHovered(v)}
-                    onMouseLeave={() => setHovered(null)}>
-                    {/* Pulse ring */}
-                    {v.status === 'IN_TRANSIT' && (
-                      <circle cx={pos.x} cy={pos.y} r={14} fill="none" stroke={color} strokeWidth={1} opacity={0.3}>
-                        <animate attributeName="r" from="8" to="20" dur="2s" repeatCount="indefinite" />
-                        <animate attributeName="opacity" from="0.5" to="0" dur="2s" repeatCount="indefinite" />
-                      </circle>
-                    )}
-                    <circle cx={pos.x} cy={pos.y} r={7} fill={color} />
-                    <text x={pos.x + 10} y={pos.y - 8} fill={color} fontSize={11} fontWeight="700" fontFamily="Space Grotesk">{v.name}</text>
-                    <text x={pos.x + 10} y={pos.y + 4} fill="rgba(255,255,255,0.4)" fontSize={9} fontFamily="Inter">{v.status}</text>
-                  </g>
-                )
-              })}
-
-              {/* Tooltip */}
-              {hovered && (() => {
-                const pos = latLngToSVG(hovered.currentLat, hovered.currentLng)
-                return (
-                  <g>
-                    <rect x={pos.x + 14} y={pos.y - 40} width={170} height={54} rx={6}
-                      fill="rgba(6,15,30,0.95)" stroke="rgba(0,212,255,0.3)" strokeWidth={1} />
-                    <text x={pos.x + 22} y={pos.y - 22} fill="var(--cyan-glow)" fontSize={12} fontWeight="700" fontFamily="Space Grotesk">{hovered.name}</text>
-                    <text x={pos.x + 22} y={pos.y - 6} fill="#7a93b4" fontSize={10} fontFamily="Inter">Lat: {hovered.currentLat.toFixed(3)} Lng: {hovered.currentLng.toFixed(3)}</text>
-                    <text x={pos.x + 22} y={pos.y + 8} fill="#7a93b4" fontSize={10} fontFamily="Inter">Status: {hovered.status}</text>
-                  </g>
-                )
-              })()}
-            </svg>
+          <div className="legend-item">
+            <span className="legend-line" style={{ background: '#64c8ff', height: '4px' }}></span>
+            <span>Energy</span>
           </div>
-          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 20, fontSize: 12, color: 'var(--text-secondary)' }}>
-            <span><span style={{ color: 'var(--cyan-glow)' }}>●</span> In Transit</span>
-            <span><span style={{ color: 'var(--gold)' }}>●</span> At Port</span>
-            <span><span style={{ color: 'var(--red-alert)' }}>●</span> Maintenance</span>
-            <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>GPS positions updating every 3s</span>
+          <div className="legend-item">
+            <span className="legend-line" style={{ background: '#64c8ff', height: '2px' }}></span>
+            <span>Bulk</span>
           </div>
-        </div>
-
-        {/* Live Feed Preview */}
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div className="feed-live-header">
-            <span className="dot dot-green" style={{ minWidth: 8, animation: feedEvents.length > 0 ? 'pulse-badge 1.5s infinite' : 'none' }}></span>
-            Live Scan Feed
-            {feedEvents.length > 0 && <span className="badge badge-cyan" style={{ marginLeft: 'auto' }}>{feedEvents.length}</span>}
-          </div>
-          <div className="feed-container">
-            {feedEvents.length === 0
-              ? (
-                <div className="feed-empty">
-                  <div style={{ fontSize: 36 }}>📡</div>
-                  <div style={{ fontWeight: 600 }}>Monitoring Active</div>
-                  <div style={{ fontSize: 12 }}>Waiting for deckhand scans…</div>
-                </div>
-              )
-              : feedEvents.slice(0, 8).map((e, i) => (
-                <div key={e.id} className={`feed-item ${i === 0 ? 'slide-in' : ''}`}>
-                  <div className="feed-icon">📦</div>
-                  <div style={{ flex: 1 }}>
-                    <div className="feed-qr">{e.qrCode}</div>
-                    <div className="feed-time">{e.timestamp}</div>
-                  </div>
-                  <span className={`badge badge-${e.status === 'LOADED' ? 'green' : e.status === 'OFFLOADED' ? 'gold' : e.status === 'DAMAGED' ? 'red' : 'cyan'}`}>
-                    {e.status}
-                  </span>
-                </div>
-              ))
-            }
+          <div className="legend-item">
+            <span className="legend-dot" style={{ background: '#ffb432' }}></span>
+            <span>Chokepoint</span>
           </div>
         </div>
       </div>
 
-      {/* Vessel stat cards */}
-      <div className="stat-grid" style={{ marginTop: 20 }}>
-        {vessels.map(v => (
-          <div key={v.id} className="card stat-card">
-            <div className="stat-label">{v.name}</div>
-            <div className="stat-value" style={{ fontSize: 16, marginTop: 8, color: STATUS_COLORS[v.status] }}>
-              {v.status.replace('_', ' ')}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-              {v.currentLat.toFixed(3)}°N, {v.currentLng.toFixed(3)}°E
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Trade Routes Toggle Button */}
+      <button
+        className={`neon-toggle-btn ${showRoutes ? 'active' : ''}`}
+        onClick={() => setShowRoutes(v => !v)}
+        title={showRoutes ? 'Hide trade routes' : 'Show trade routes'}
+      >
+        <span className="neon-glow-top"></span>
+        Trade Routes
+        <span className="neon-glow-bottom"></span>
+      </button>
+
+      <style>{`
+        .fleet-map-fullscreen {
+          position: fixed;
+          top: 0;
+          left: 240px;
+          right: 0;
+          bottom: 0;
+          z-index: 1;
+        }
+        
+        /* Floating Header */
+        .map-overlay-header {
+          position: absolute;
+          top: 24px;
+          left: 24px;
+          z-index: 10;
+          pointer-events: none;
+        }
+        
+        .map-title {
+          margin: 0;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 24px;
+          font-weight: 700;
+          color: white;
+          text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+          letter-spacing: -0.3px;
+        }
+        
+        .map-subtitle {
+          margin: 4px 0 0 0;
+          font-size: 13px;
+          color: rgba(255,255,255,0.7);
+          text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+        }
+        
+        /* Floating Badges */
+        .map-overlay-badges {
+          position: absolute;
+          top: 24px;
+          right: 24px;
+          z-index: 10;
+          display: flex;
+          gap: 10px;
+        }
+        
+        .map-badge {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 14px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 600;
+          backdrop-filter: blur(10px);
+          border: 1px solid;
+        }
+        
+        .map-badge-green {
+          background: rgba(0, 230, 118, 0.15);
+          border-color: rgba(0, 230, 118, 0.4);
+          color: #00e676;
+        }
+        
+        .map-badge-cyan {
+          background: rgba(0, 212, 255, 0.15);
+          border-color: rgba(0, 212, 255, 0.4);
+          color: #00d4ff;
+        }
+        
+        .map-badge-dot {
+          width: 6px;
+          height: 6px;
+          background: currentColor;
+          border-radius: 50%;
+          animation: pulse-dot 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        
+        /* Floating Legend */
+        .map-overlay-legend {
+          position: absolute;
+          bottom: 24px;
+          left: 24px;
+          z-index: 10;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 12px 20px;
+          background: rgba(6, 12, 24, 0.9);
+          border: 1px solid rgba(0, 212, 255, 0.3);
+          border-radius: 10px;
+          backdrop-filter: blur(12px);
+          box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+        }
+        
+        .legend-label {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 1.5px;
+          color: rgba(255,255,255,0.5);
+        }
+        
+        .legend-items-row {
+          display: flex;
+          gap: 20px;
+        }
+        
+        .legend-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          font-weight: 500;
+          color: rgba(255,255,255,0.9);
+        }
+        
+        .legend-line {
+          width: 20px;
+          border-radius: 2px;
+          background: #64c8ff;
+        }
+        
+        .legend-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          border: 2px solid rgba(255,255,255,0.6);
+          box-shadow: 0 0 6px rgba(0,0,0,0.5);
+        }
+        
+        /* Neon Toggle Button */
+        .neon-toggle-btn {
+          position: absolute;
+          top: 120px;
+          left: 24px;
+          z-index: 10;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 8px 20px;
+          font-size: 13px;
+          font-weight: 500;
+          color: rgba(255, 255, 255, 0.8);
+          background: rgba(10, 15, 30, 0.9);
+          border: 1px solid rgba(100, 200, 255, 0.25);
+          border-radius: 9999px;
+          cursor: pointer;
+          backdrop-filter: blur(12px);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+          transition: all 0.3s ease;
+          letter-spacing: 0.3px;
+          overflow: hidden;
+        }
+        
+        .neon-toggle-btn:hover {
+          color: rgba(255, 255, 255, 1);
+          border-color: rgba(100, 200, 255, 0.5);
+          background: rgba(15, 25, 50, 0.95);
+        }
+        
+        .neon-toggle-btn.active {
+          color: rgba(255, 255, 255, 1);
+          background: rgba(30, 60, 120, 0.4);
+          border-color: rgba(100, 200, 255, 0.6);
+          box-shadow: 0 4px 25px rgba(0, 150, 255, 0.15);
+        }
+        
+        .neon-glow-top {
+          position: absolute;
+          top: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 60%;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(100, 200, 255, 0.8), transparent);
+          opacity: 0;
+          transition: opacity 0.5s ease;
+        }
+        
+        .neon-toggle-btn:hover .neon-glow-top {
+          opacity: 1;
+        }
+        
+        .neon-glow-bottom {
+          position: absolute;
+          bottom: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 60%;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(100, 200, 255, 0.6), transparent);
+          opacity: 0.2;
+          transition: opacity 0.5s ease;
+        }
+        
+        .neon-toggle-btn:hover .neon-glow-bottom {
+          opacity: 0.5;
+        }
+        
+        /* Map controls styling */
+        .maplibregl-ctrl-group {
+          background: rgba(6, 12, 24, 0.9) !important;
+          border: 1px solid rgba(0, 212, 255, 0.3) !important;
+          border-radius: 8px !important;
+          overflow: hidden;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
+        }
+        
+        .maplibregl-ctrl-group button {
+          background: transparent !important;
+          border-bottom: 1px solid rgba(0, 212, 255, 0.15) !important;
+          width: 32px !important;
+          height: 32px !important;
+        }
+        
+        .maplibregl-ctrl-group button:last-child {
+          border-bottom: none !important;
+        }
+        
+        .maplibregl-ctrl-group button:hover {
+          background: rgba(0, 212, 255, 0.15) !important;
+        }
+        
+        .maplibregl-ctrl-icon {
+          filter: brightness(2) !important;
+        }
+        
+        /* DeckGL tooltip */
+        .deck-tooltip {
+          background: rgba(6, 12, 24, 0.98) !important;
+          border: 1px solid rgba(0, 212, 255, 0.4) !important;
+          border-radius: 8px !important;
+          padding: 12px 16px !important;
+          font-family: 'Inter', sans-serif !important;
+          font-size: 13px !important;
+          color: white !important;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important;
+          z-index: 1000 !important;
+        }
+      `}</style>
     </div>
   )
 }

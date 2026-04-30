@@ -117,7 +117,7 @@ export default function App() {
   }, [fetchLatestState])
 
   const views = {
-    fleet: <FleetMap vessels={vessels} feedEvents={feedEvents} />,
+    fleet: <FleetMap />,
     voyage: <VoyageCard vessels={vessels} />,
     fuel: <FuelOptimizer vessels={vessels} />,
     feed: <CargoFeed events={feedEvents} />,
@@ -136,14 +136,14 @@ export default function App() {
         feedEvents={feedEvents}
         connectionStatus={connectionStatus}
       />
-      <main className="app-main">
-        {connectionStatus === 'disconnected' && (
+      <main className={`app-main ${activeView === 'fleet' ? 'app-main-full' : ''}`}>
+        {connectionStatus === 'disconnected' && activeView !== 'fleet' && (
           <div className="connection-banner connection-banner-warn">
             <span className="dot dot-amber pulse" style={{ width: 8, height: 8, minWidth: 8 }}></span>
             Connection lost — attempting to reconnect…
           </div>
         )}
-        <div className="fade-in" key={activeView}>
+        <div className={activeView !== 'fleet' ? 'fade-in' : ''} key={activeView}>
           {views[activeView]}
         </div>
       </main>

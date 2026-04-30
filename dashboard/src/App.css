@@ -15,6 +15,11 @@
   position: relative;
 }
 
+.app-main-full {
+  padding: 0;
+  overflow: hidden;
+}
+
 /* --- SIDEBAR --- */
 .sidebar {
   width: 240px;
@@ -487,3 +492,136 @@
 /* Dot color variants */
 .dot-red { background: var(--red-alert); box-shadow: 0 0 6px var(--red-alert); }
 .dot-amber { background: var(--amber-warn); box-shadow: 0 0 6px var(--amber-warn); }
+
+/* --- MAPLIBRE MAP STYLES --- */
+.fleet-map-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.map-container-full {
+  width: 100%;
+  height: 100%;
+}
+
+/* MapLibre popup customization */
+.maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 8px !important;
+}
+
+.maplibregl-popup-tip {
+  border-top-color: rgba(10, 15, 30, 0.95) !important;
+}
+
+/* Legend styles */
+.map-legend {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  background: rgba(10, 15, 30, 0.95);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 8px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  backdrop-filter: blur(10px);
+  z-index: 10;
+}
+
+.legend-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.legend-items {
+  display: flex;
+  gap: 20px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.6);
+  box-shadow: 0 0 6px rgba(0,0,0,0.5);
+}
+
+/* Alert marker styles */
+.alert-marker {
+  transition: transform 0.2s ease !important;
+}
+
+.alert-marker:hover {
+  transform: scale(1.4) !important;
+  z-index: 1000 !important;
+}
+
+/* Vessel marker with pulse animation */
+.vessel-marker {
+  animation: vesselPulse 2s ease-in-out infinite;
+}
+
+@keyframes vesselPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 15px rgba(0, 212, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 212, 255, 0);
+  }
+}
+
+/* Custom popup styles */
+.custom-popup .maplibregl-popup-content {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Map navigation controls customization */
+.maplibregl-ctrl-group {
+  background: rgba(10, 15, 30, 0.9) !important;
+  border: 1px solid rgba(0, 212, 255, 0.2) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.maplibregl-ctrl-group button {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.1) !important;
+}
+
+.maplibregl-ctrl-group button:last-child {
+  border-bottom: none !important;
+}
+
+.maplibregl-ctrl-group button:hover {
+  background: rgba(0, 212, 255, 0.1) !important;
+}
+
+.maplibregl-ctrl-icon {
+  filter: invert(1) !important;
+}
