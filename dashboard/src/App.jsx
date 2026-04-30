@@ -8,7 +8,6 @@ import FuelOptimizer from './components/FuelOptimizer'
 import CrewRoster from './components/CrewRoster'
 import CostLedger from './components/CostLedger'
 import WeatherRisk from './components/WeatherRisk'
-import NewsPanel from './components/NewsPanel'
 import CargoArrangement from './components/CargoArrangement'
 import './App.css'
 
@@ -124,7 +123,6 @@ export default function App() {
     crew: <CrewRoster backendUrl={BACKEND_URL} />,
     cost: <CostLedger backendUrl={BACKEND_URL} costUpdates={costUpdates} />,
     weather: <WeatherRisk vessels={vessels} />,
-    news: <NewsPanel vessels={vessels} />,
     arrangement: <CargoArrangement />,
   }
 

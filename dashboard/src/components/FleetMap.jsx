@@ -5,6 +5,7 @@ import { useTradeRoutesLayers } from './TradeRoutesLayer'
 import { useAisLayers } from './AisLayer'
 import { usePortsLayers } from './PortsLayer'
 import { useWeatherLayers } from './WeatherLayer'
+import LiveIntelligence from './LiveIntelligence'
 import { fetchAisSignals, getAisStatus, hasAisData } from '@/services/ais'
 import { fetchWeatherAlerts, getWeatherStatus, hasWeatherData } from '@/services/weather'
 import { fetchRadarTiles } from '@/services/weatherRadar'
@@ -26,6 +27,7 @@ export default function FleetMap() {
   const [showAisDensity, setShowAisDensity] = useState(false) // Default off - manual fetch only
   const [showAisDisruptions, setShowAisDisruptions] = useState(false) // Default off - manual fetch only
   const [showWeather, setShowWeather] = useState(false) // Default off - manual fetch only
+  const [showIntelligence, setShowIntelligence] = useState(false)
   const [aisDensity, setAisDensity] = useState([])
   const [aisDisruptions, setAisDisruptions] = useState([])
   const [weatherAlerts, setWeatherAlerts] = useState([])
@@ -344,7 +346,23 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           Weather
           <span className="neon-glow-bottom"></span>
         </button>
+
+        <button
+          className={`neon-toggle-btn ${showIntelligence ? 'active' : ''}`}
+          onClick={() => setShowIntelligence(v => !v)}
+          title={showIntelligence ? 'Hide intelligence feed' : 'Show live intelligence'}
+        >
+          <span className="neon-glow-top"></span>
+          Intelligence
+          <span className="neon-glow-bottom"></span>
+        </button>
       </div>
+
+      {/* Live Intelligence Panel */}
+      <LiveIntelligence
+        isOpen={showIntelligence}
+        onClose={() => setShowIntelligence(false)}
+      />
 
       <style>{`
         .fleet-map-fullscreen {
