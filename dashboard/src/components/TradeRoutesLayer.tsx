@@ -3,7 +3,6 @@ import { ArcLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { TripsLayer } from '@deck.gl/geo-layers';
 import {
   resolveTradeRouteSegments,
-  TRADE_ROUTES,
   ROUTE_WAYPOINTS_MAP,
   type TradeRouteSegment,
 } from '@/config/trade-routes';

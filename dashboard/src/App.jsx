@@ -9,6 +9,8 @@ import CrewRoster from './components/CrewRoster'
 import CostLedger from './components/CostLedger'
 import WeatherRisk from './components/WeatherRisk'
 import CargoArrangement from './components/CargoArrangement'
+import AIInsightsPanel from './components/AIInsightsPanel'
+import { fetchNews } from './services/news-aggregator'
 import './App.css'
 
 const BACKEND_URL = 'http://localhost:4000'
@@ -24,6 +26,9 @@ export default function App() {
   const [vessels, setVessels] = useState(MOCK_VESSELS)
   const [costUpdates, setCostUpdates] = useState({})
   const [connectionStatus, setConnectionStatus] = useState('connecting')
+  const [insightNewsItems, setInsightNewsItems] = useState([])
+  const [isLoadingInsightsNews, setIsLoadingInsightsNews] = useState(false)
+  const [insightsNewsError, setInsightsNewsError] = useState(null)
   const socketRef = useRef(null)
   const pollingRef = useRef(null)
 
@@ -36,6 +41,20 @@ export default function App() {
       }
     } catch {
       console.warn('[Fallback] Backend unreachable via HTTP')
+    }
+  }, [])
+
+  const loadInsightNews = useCallback(async () => {
+    setIsLoadingInsightsNews(true)
+    setInsightsNewsError(null)
+    try {
+      const result = await fetchNews()
+      setInsightNewsItems(result.items || [])
+    } catch (err) {
+      console.error('[AI Insights] Failed to load news:', err)
+      setInsightsNewsError(err instanceof Error ? err.message : 'Failed to load live news')
+    } finally {
+      setIsLoadingInsightsNews(false)
     }
   }, [])
 
@@ -115,6 +134,12 @@ export default function App() {
     }
   }, [fetchLatestState])
 
+  useEffect(() => {
+    if (activeView === 'insights' && insightNewsItems.length === 0 && !isLoadingInsightsNews) {
+      loadInsightNews()
+    }
+  }, [activeView, insightNewsItems.length, isLoadingInsightsNews, loadInsightNews])
+
   const views = {
     fleet: <FleetMap />,
     voyage: <VoyageCard vessels={vessels} />,
@@ -123,6 +148,12 @@ export default function App() {
     crew: <CrewRoster backendUrl={BACKEND_URL} />,
     cost: <CostLedger backendUrl={BACKEND_URL} costUpdates={costUpdates} />,
     weather: <WeatherRisk vessels={vessels} />,
+    insights: <AIInsightsPanel
+      items={insightNewsItems}
+      isLoadingNews={isLoadingInsightsNews}
+      newsError={insightsNewsError}
+      onRefreshNews={loadInsightNews}
+    />,
     arrangement: <CargoArrangement />,
   }
 

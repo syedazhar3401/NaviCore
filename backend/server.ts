@@ -8,6 +8,7 @@ import weatherRoutes from './routes/weather.js';
 import mcpRoutes from './routes/mcp.js';
 import crewRoutes from './routes/crew.js';
 import newsRoutes from './routes/news.js';
+import insightsRoutes from './routes/insights.js';
 import arrangementRoutes from './routes/arrangement.js';
 import { startCostEngine } from './utils/costEngine.js';
 
@@ -26,6 +27,7 @@ app.use('/api', weatherRoutes);
 app.use('/api', mcpRoutes);
 app.use('/api', crewRoutes);
 app.use('/api', newsRoutes);
+app.use('/api', insightsRoutes);
 app.use('/api', arrangementRoutes);
 
 // --- REST ENDPOINTS ---

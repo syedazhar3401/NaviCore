@@ -1,4 +1,4 @@
-import type { Port, PortType } from '@/types/trade';
+import type { Port } from '@/types/trade';
 
 export const PORTS: Port[] = [
   // Top Container Ports

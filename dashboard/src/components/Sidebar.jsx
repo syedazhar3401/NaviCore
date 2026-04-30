@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { id: 'voyage', icon: '⚓', label: 'Voyage Overview', section: 'OVERVIEW' },
   { id: 'weather', icon: '🌊', label: 'Weather & Risk', section: 'INTELLIGENCE' },
   { id: 'fuel', icon: '⛽', label: 'Fuel Stop Optimizer', section: 'INTELLIGENCE' },
+  { id: 'insights', icon: '🤖', label: 'AI Insights', section: 'INTELLIGENCE' },
   { id: 'cost', icon: '💰', label: 'Cost Ledger', section: 'OPERATIONS' },
   { id: 'arrangement', icon: '📦', label: 'Cargo Arrangement', section: 'OPERATIONS' },
   { id: 'feed', icon: '📡', label: 'Loading Feed', section: 'LIVE' },
