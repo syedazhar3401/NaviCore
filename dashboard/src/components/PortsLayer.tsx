@@ -53,9 +53,9 @@ export function usePortsLayers({
 
     return new TextLayer<Port>({
       id: 'ports-labels-layer',
-      data: PORTS.filter(p => p.rank && p.rank <= 30), // Only label top 30 ports to avoid clutter
+      data: PORTS.filter(p => p.rank && p.rank <= 20), // Only label top 20 ports to avoid clutter
       getPosition: d => [d.lon, d.lat],
-      getText: d => d.name.split(' ').slice(-2).join(' '), // Short name
+      getText: d => d.name.replace(/^Port of\s+/i, ''), // Clean label text
       getSize: d => d.rank && d.rank <= 10 ? 14 : 11,
       getColor: [255, 255, 255, 200],
       getPixelOffset: [0, -15],

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { io } from 'socket.io-client'
-import Sidebar from './components/Sidebar'
+import AppStatusPill from './components/AppStatusPill'
+import TopDock from './components/TopDock'
 import FleetMap from './components/FleetMap'
 import VoyageCard from './components/VoyageCard'
 import CargoFeed from './components/CargoFeed'
@@ -129,11 +130,11 @@ export default function App() {
 
   return (
     <div className="app-layout">
-      <Sidebar
+      <AppStatusPill connectionStatus={connectionStatus} />
+      <TopDock
         activeView={activeView}
         onNavigate={setActiveView}
         feedEvents={feedEvents}
-        connectionStatus={connectionStatus}
       />
       <main className={`app-main ${activeView === 'fleet' ? 'app-main-full' : ''}`}>
         {connectionStatus === 'disconnected' && activeView !== 'fleet' && (

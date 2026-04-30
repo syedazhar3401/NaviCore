@@ -94,7 +94,7 @@ export default function FleetMap() {
 
   const portsLayers = usePortsLayers({
     visible: showPorts,
-    showLabels: true,
+    showLabels: showPorts,
   })
 
   // Debug logging
@@ -187,6 +187,33 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
     return null
   }, [])
 
+  const applyMapPalette = useCallback((map) => {
+    const setPaintIfLayerExists = (layerId, property, value) => {
+      if (map.getLayer(layerId)) {
+        map.setPaintProperty(layerId, property, value)
+      }
+    }
+
+    // Cool blue-dark palette
+    setPaintIfLayerExists('background', 'background-color', '#0a1628')
+
+    ;['water', 'water_intermittent'].forEach((layerId) => {
+      setPaintIfLayerExists(layerId, 'fill-color', '#2a3442')
+    })
+
+    ;['waterway', 'waterway_intermittent'].forEach((layerId) => {
+      setPaintIfLayerExists(layerId, 'line-color', '#36485d')
+    })
+
+    ;['landcover', 'landuse', 'landuse_overlay', 'park', 'landcover_grass', 'landcover_wood'].forEach((layerId) => {
+      setPaintIfLayerExists(layerId, 'fill-color', '#12263f')
+    })
+
+    ;['boundary_country', 'boundary_country_z0-4', 'boundary_country_z5-', 'boundary_state'].forEach((layerId) => {
+      setPaintIfLayerExists(layerId, 'line-color', '#355276')
+    })
+  }, [])
+
   return (
     <div className="fleet-map-fullscreen">
       {/* Full-screen map container */}
@@ -197,7 +224,11 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
         getTooltip={getTooltip}
         style={{ width: '100%', height: '100%' }}
       >
-        <Map mapStyle={MAP_STYLE} attributionControl={false}>
+        <Map
+          mapStyle={MAP_STYLE}
+          attributionControl={false}
+          onLoad={(event) => applyMapPalette(event.target)}
+        >
           {/* Weather Radar Layer - RainViewer tiles */}
           {showWeather && radarTileUrl && (
             <Source
@@ -368,7 +399,7 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
         .fleet-map-fullscreen {
           position: fixed;
           top: 0;
-          left: 240px;
+          left: 0;
           right: 0;
           bottom: 0;
           z-index: 1;
@@ -377,7 +408,7 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
         /* Floating Header */
         .map-overlay-header {
           position: absolute;
-          top: 24px;
+          top: 86px;
           left: 24px;
           z-index: 10;
           pointer-events: none;
@@ -510,7 +541,7 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
         /* Toggle Buttons Row */
         .toggle-buttons-row {
           position: absolute;
-          top: 120px;
+          top: 182px;
           left: 24px;
           z-index: 10;
           display: flex;
