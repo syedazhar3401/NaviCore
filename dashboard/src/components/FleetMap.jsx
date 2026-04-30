@@ -3,6 +3,7 @@ import { Map } from 'react-map-gl/maplibre'
 import { DeckGL } from 'deck.gl'
 import { useTradeRoutesLayers } from './TradeRoutesLayer'
 import { useAisLayers } from './AisLayer'
+import { usePortsLayers } from './PortsLayer'
 import { fetchAisSignals, getAisStatus, startAisPolling, stopAisPolling } from '@/services/ais'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -18,6 +19,7 @@ const INITIAL_VIEW = {
 
 export default function FleetMap() {
   const [showRoutes, setShowRoutes] = useState(true)
+  const [showPorts, setShowPorts] = useState(true)
   const [showAisDensity, setShowAisDensity] = useState(true)
   const [showAisDisruptions, setShowAisDisruptions] = useState(true)
   const [aisDensity, setAisDensity] = useState([])
@@ -60,7 +62,12 @@ export default function FleetMap() {
     showDisruptions: showAisDisruptions,
   })
 
-  const allLayers = [...tradeRouteLayers, ...aisLayers]
+  const portsLayers = usePortsLayers({
+    visible: showPorts,
+    showLabels: true,
+  })
+
+  const allLayers = [...tradeRouteLayers, ...aisLayers, ...portsLayers]
 
   const getTooltip = useCallback(({ object }) => {
     if (!object) return null
@@ -108,6 +115,17 @@ ${object.description}`,
       }
     }
 
+    // Port
+    if (object.country !== undefined) {
+      return {
+        text: `${object.name}
+Country: ${object.country}
+Type: ${object.type}
+${object.rank ? `Rank: #${object.rank} globally` : ''}
+${object.note || ''}`,
+      }
+    }
+
     return null
   }, [])
 
@@ -146,26 +164,40 @@ ${object.description}`,
         <span className="legend-label">LEGEND</span>
         <div className="legend-items-row">
           <div className="legend-item">
-            <span className="legend-line" style={{ background: '#64c8ff', height: '3px' }}></span>
-            <span>Container</span>
+            <span className="legend-dot" style={{ background: '#00d1ff' }}></span>
+            <span>Container Port</span>
           </div>
           <div className="legend-item">
-            <span className="legend-line" style={{ background: '#64c8ff', height: '4px' }}></span>
-            <span>Energy</span>
+            <span className="legend-dot" style={{ background: '#ff6432' }}></span>
+            <span>Oil Terminal</span>
+          </div>
+          <div className="legend-item">
+            <span className="legend-dot" style={{ background: '#64ff96' }}></span>
+            <span>LNG Terminal</span>
+          </div>
+          <div className="legend-item">
+            <span className="legend-dot" style={{ background: '#c896ff' }}></span>
+            <span>Mixed Port</span>
           </div>
           <div className="legend-item">
             <span className="legend-line" style={{ background: '#64c8ff', height: '2px' }}></span>
-            <span>Bulk</span>
-          </div>
-          <div className="legend-item">
-            <span className="legend-dot" style={{ background: '#ffb432' }}></span>
-            <span>Chokepoint</span>
+            <span>Trade Route</span>
           </div>
         </div>
       </div>
 
       {/* Toggle Buttons Row */}
       <div className="toggle-buttons-row">
+        <button
+          className={`neon-toggle-btn ${showPorts ? 'active' : ''}`}
+          onClick={() => setShowPorts(v => !v)}
+          title={showPorts ? 'Hide ports' : 'Show ports'}
+        >
+          <span className="neon-glow-top"></span>
+          Ports (76)
+          <span className="neon-glow-bottom"></span>
+        </button>
+
         <button
           className={`neon-toggle-btn ${showRoutes ? 'active' : ''}`}
           onClick={() => setShowRoutes(v => !v)}
