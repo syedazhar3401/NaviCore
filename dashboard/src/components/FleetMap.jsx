@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Map } from 'react-map-gl/maplibre'
 import { DeckGL } from 'deck.gl'
 import { useTradeRoutesLayers } from './TradeRoutesLayer'
+import { useAisLayers } from './AisLayer'
+import { fetchAisSignals, getAisStatus, startAisPolling, stopAisPolling } from '@/services/ais'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
@@ -16,12 +18,49 @@ const INITIAL_VIEW = {
 
 export default function FleetMap() {
   const [showRoutes, setShowRoutes] = useState(true)
+  const [showAisDensity, setShowAisDensity] = useState(true)
+  const [showAisDisruptions, setShowAisDisruptions] = useState(true)
+  const [aisDensity, setAisDensity] = useState([])
+  const [aisDisruptions, setAisDisruptions] = useState([])
+  const [aisStatus, setAisStatus] = useState({ connected: false, vessels: 0, messages: 0 })
 
-  const { layers } = useTradeRoutesLayers({
+  // Load AIS data
+  useEffect(() => {
+    const loadData = async () => {
+      const { disruptions, density } = await fetchAisSignals()
+      setAisDisruptions(disruptions)
+      setAisDensity(density)
+      setAisStatus(getAisStatus())
+    }
+
+    loadData()
+    startAisPolling()
+
+    // Refresh status every 10 seconds
+    const interval = setInterval(() => {
+      setAisStatus(getAisStatus())
+    }, 10000)
+
+    return () => {
+      stopAisPolling()
+      clearInterval(interval)
+    }
+  }, [])
+
+  const { layers: tradeRouteLayers } = useTradeRoutesLayers({
     visible: showRoutes,
     animationEnabled: showRoutes,
     showChokepoints: showRoutes,
   })
+
+  const aisLayers = useAisLayers({
+    disruptions: aisDisruptions,
+    density: aisDensity,
+    showDensity: showAisDensity,
+    showDisruptions: showAisDisruptions,
+  })
+
+  const allLayers = [...tradeRouteLayers, ...aisLayers]
 
   const getTooltip = useCallback(({ object }) => {
     if (!object) return null
@@ -36,10 +75,35 @@ Volume: ${object.volumeDesc}`,
       }
     }
 
-    if (object.name) {
+    if (object.name && object.waterwayId) {
       // Chokepoint
       return {
         text: `${object.name}
+${object.description}`,
+      }
+    }
+
+    // AIS Density Zone
+    if (object.shipsPerDay !== undefined) {
+      return {
+        text: `${object.name}
+Intensity: ${(object.intensity * 100).toFixed(0)}%
+Ships/day: ${object.shipsPerDay || 'N/A'}
+Change: ${object.deltaPct > 0 ? '+' : ''}${object.deltaPct}%
+${object.note || ''}`,
+      }
+    }
+
+    // AIS Disruption Event
+    if (object.darkShips !== undefined) {
+      return {
+        text: `${object.name}
+Type: ${object.type}
+Severity: ${object.severity}
+Dark ships: ${object.darkShips || 'N/A'}
+Vessels: ${object.vesselCount || 'N/A'}
+Change: +${object.changePct}%
+
 ${object.description}`,
       }
     }
@@ -53,7 +117,7 @@ ${object.description}`,
       <DeckGL
         initialViewState={INITIAL_VIEW}
         controller={true}
-        layers={layers}
+        layers={allLayers}
         getTooltip={getTooltip}
         style={{ width: '100%', height: '100%' }}
       >
@@ -100,16 +164,38 @@ ${object.description}`,
         </div>
       </div>
 
-      {/* Trade Routes Toggle Button */}
-      <button
-        className={`neon-toggle-btn ${showRoutes ? 'active' : ''}`}
-        onClick={() => setShowRoutes(v => !v)}
-        title={showRoutes ? 'Hide trade routes' : 'Show trade routes'}
-      >
-        <span className="neon-glow-top"></span>
-        Trade Routes
-        <span className="neon-glow-bottom"></span>
-      </button>
+      {/* Toggle Buttons Row */}
+      <div className="toggle-buttons-row">
+        <button
+          className={`neon-toggle-btn ${showRoutes ? 'active' : ''}`}
+          onClick={() => setShowRoutes(v => !v)}
+          title={showRoutes ? 'Hide trade routes' : 'Show trade routes'}
+        >
+          <span className="neon-glow-top"></span>
+          Trade Routes
+          <span className="neon-glow-bottom"></span>
+        </button>
+
+        <button
+          className={`neon-toggle-btn ${showAisDensity ? 'active' : ''}`}
+          onClick={() => setShowAisDensity(v => !v)}
+          title={showAisDensity ? 'Hide AIS density' : 'Show AIS density'}
+        >
+          <span className="neon-glow-top"></span>
+          Ship Traffic
+          <span className="neon-glow-bottom"></span>
+        </button>
+
+        <button
+          className={`neon-toggle-btn ${showAisDisruptions ? 'active' : ''}`}
+          onClick={() => setShowAisDisruptions(v => !v)}
+          title={showAisDisruptions ? 'Hide AIS disruptions' : 'Show AIS disruptions'}
+        >
+          <span className="neon-glow-top"></span>
+          Disruptions
+          <span className="neon-glow-bottom"></span>
+        </button>
+      </div>
 
       <style>{`
         .fleet-map-fullscreen {
@@ -246,12 +332,19 @@ ${object.description}`,
           box-shadow: 0 0 6px rgba(0,0,0,0.5);
         }
         
-        /* Neon Toggle Button */
-        .neon-toggle-btn {
+        /* Toggle Buttons Row */
+        .toggle-buttons-row {
           position: absolute;
           top: 120px;
           left: 24px;
           z-index: 10;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        
+        /* Neon Toggle Button */
+        .neon-toggle-btn {
           display: inline-flex;
           align-items: center;
           justify-content: center;
