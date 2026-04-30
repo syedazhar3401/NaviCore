@@ -10,6 +10,7 @@ interface AIInsightsPanelProps {
   newsError?: string | null;
   onRefreshNews?: () => Promise<void> | void;
   className?: string;
+  compact?: boolean;
 }
 
 export default function AIInsightsPanel({
@@ -18,6 +19,7 @@ export default function AIInsightsPanel({
   newsError = null,
   onRefreshNews,
   className = '',
+  compact = false,
 }: AIInsightsPanelProps) {
   const [insight, setInsight] = useState<AIInsightsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -51,16 +53,18 @@ export default function AIInsightsPanel({
   };
 
   return (
-    <div className={`ai-insights-page ${className}`}>
-      <div className="page-header">
-        <div>
-          <div className="page-title">AI Intelligence Brief</div>
-          <div className="page-subtitle">AI synthesis from real-time global news and risk signals</div>
+    <div className={`ai-insights-page ${compact ? 'ai-insights-compact' : ''} ${className}`}>
+      {!compact && (
+        <div className="page-header">
+          <div>
+            <div className="page-title">AI Intelligence Brief</div>
+            <div className="page-subtitle">AI synthesis from real-time global news and risk signals</div>
+          </div>
+          <button className="ai-refresh-btn" onClick={handleRefresh} disabled={isLoading || isLoadingNews || items.length === 0}>
+            {isLoading || isLoadingNews ? 'Analyzing…' : 'Refresh Analysis'}
+          </button>
         </div>
-        <button className="ai-refresh-btn" onClick={handleRefresh} disabled={isLoading || isLoadingNews || items.length === 0}>
-          {isLoading || isLoadingNews ? 'Analyzing…' : 'Refresh Analysis'}
-        </button>
-      </div>
+      )}
 
       {newsError && (
         <div className="ai-state-card ai-error">
@@ -88,9 +92,9 @@ export default function AIInsightsPanel({
         <div className="ai-insights-panel">
           <div className="ai-panel-header">
             <div>
-              <h3>Analysis Complete</h3>
+              <h3>{compact ? 'AI Insight' : 'Analysis Complete'}</h3>
               <p>
-                {insight.analysisReport.totalHeadlines} clusters analyzed · {insight.focalPoints.length} focal points · {insight.cached ? 'cached' : 'fresh'}
+                {insight.analysisReport.totalHeadlines} clusters · {insight.focalPoints.length} focal points · {insight.cached ? 'cached' : 'fresh'}
               </p>
             </div>
             <div className="ai-provider-pill">
@@ -100,7 +104,7 @@ export default function AIInsightsPanel({
 
           <div className="ai-tabs">
             <button className={activeTab === 'summary' ? 'active' : ''} onClick={() => setActiveTab('summary')}>Summary</button>
-            <button className={activeTab === 'focal' ? 'active' : ''} onClick={() => setActiveTab('focal')}>Focal Points ({insight.focalPoints.length})</button>
+            <button className={activeTab === 'focal' ? 'active' : ''} onClick={() => setActiveTab('focal')}>Focal ({insight.focalPoints.length})</button>
             <button className={activeTab === 'stories' ? 'active' : ''} onClick={() => setActiveTab('stories')}>Top Stories</button>
           </div>
 

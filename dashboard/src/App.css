@@ -708,6 +708,96 @@
   text-align: right;
 }
 
+.ai-insights-compact {
+  max-width: none;
+  margin: 0;
+}
+
+.ai-insights-compact .ai-insights-panel,
+.ai-insights-compact .ai-state-card {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.ai-insights-compact .ai-state-card {
+  padding: 36px 18px;
+}
+
+.ai-insights-compact .ai-panel-header {
+  padding: 12px 4px 14px;
+}
+
+.ai-insights-compact .ai-panel-header h3 {
+  font-size: 14px;
+}
+
+.ai-insights-compact .ai-provider-pill {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+}
+
+.ai-insights-compact .ai-tabs {
+  padding: 10px 0;
+  overflow-x: auto;
+}
+
+.ai-insights-compact .ai-tabs button {
+  white-space: nowrap;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+.ai-insights-compact .ai-summary-tab,
+.ai-insights-compact .ai-focal-grid,
+.ai-insights-compact .ai-stories-list {
+  padding: 12px 0;
+}
+
+.ai-insights-compact .ai-summary-tab {
+  grid-template-columns: 1fr;
+}
+
+.ai-insights-compact .ai-summary-card,
+.ai-insights-compact .ai-context-card,
+.ai-insights-compact .ai-focal-card,
+.ai-insights-compact .ai-story-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.ai-insights-compact .ai-summary-card,
+.ai-insights-compact .ai-context-card {
+  padding: 14px;
+}
+
+.ai-insights-compact .ai-focal-grid {
+  grid-template-columns: 1fr;
+}
+
+.ai-insights-compact .ai-story-card {
+  padding: 12px;
+}
+
+.ai-insights-compact .ai-story-rank {
+  min-width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.ai-insights-compact .ai-footer-meta {
+  padding: 0 0 12px;
+}
+
+.li-ai-insights {
+  color: rgba(255, 255, 255, 0.92);
+}
+
 @media (max-width: 900px) {
   .ai-summary-tab {
     grid-template-columns: 1fr;

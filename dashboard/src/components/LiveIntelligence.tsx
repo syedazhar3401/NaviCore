@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { NewsItem } from '@/types/news';
 import { DISPLAY_CATEGORIES, fetchNews, formatTimeAgo, getTagColor, getSourceColor } from '@/services/news-aggregator';
+import AIInsightsPanel from './AIInsightsPanel';
 
 interface LiveIntelligenceProps {
   isOpen: boolean;
@@ -14,36 +15,38 @@ export default function LiveIntelligence({ isOpen, onClose }: LiveIntelligencePr
   const [activeTab, setActiveTab] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isRealData, setIsRealData] = useState(false);
+  const [allNewsItems, setAllNewsItems] = useState<NewsItem[]>([]);
+
+  const loadNews = useCallback(async () => {
+    if (!isOpen) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await fetchNews();
+      setNewsByCategory(result.byCategory);
+      setAllNewsItems(result.items || []);
+      setLastUpdated(new Date());
+      setIsRealData(true);
+    } catch (err) {
+      console.error('[LiveIntelligence] Failed to load news:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load intelligence data');
+      setIsRealData(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
-    const loadNews = async () => {
-      if (!isOpen) return;
-      setIsLoading(true);
-      setError(null);
-      try {
-        const result = await fetchNews();
-        setNewsByCategory(result.byCategory);
-        setLastUpdated(new Date());
-        setIsRealData(true);
-      } catch (err) {
-        console.error('[LiveIntelligence] Failed to load news:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load intelligence data');
-        setIsRealData(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadNews();
 
     // Auto-refresh every 2 minutes
     const interval = setInterval(loadNews, 120000);
     return () => clearInterval(interval);
-  }, [isOpen]);
+  }, [loadNews]);
 
   // Filter items based on active tab
   const filteredCategories = useMemo(() => {
-    if (activeTab === 'all') return newsByCategory;
+    if (activeTab === 'all' || activeTab === 'ai') return newsByCategory;
 
     const filtered = new Map<string, NewsItem[]>();
     newsByCategory.forEach((items, categoryId) => {
@@ -117,6 +120,13 @@ export default function LiveIntelligence({ isOpen, onClose }: LiveIntelligencePr
           <span className="li-tab-icon">☢️</span>
           Nuclear
         </button>
+        <button
+          className={`li-tab ${activeTab === 'ai' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ai')}
+        >
+          <span className="li-tab-icon">🤖</span>
+          AI Insight
+        </button>
       </div>
 
       {/* Content */}
@@ -137,6 +147,15 @@ export default function LiveIntelligence({ isOpen, onClose }: LiveIntelligencePr
               <code>cd backend && npm run dev</code>
             </div>
           </div>
+        ) : activeTab === 'ai' ? (
+          <AIInsightsPanel
+            items={allNewsItems}
+            isLoadingNews={isLoading}
+            newsError={error}
+            onRefreshNews={loadNews}
+            compact
+            className="li-ai-insights"
+          />
         ) : (
           <div className="li-categories">
             {!isRealData && (
