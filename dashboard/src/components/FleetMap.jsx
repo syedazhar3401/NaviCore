@@ -7,9 +7,11 @@ import { usePortsLayers } from './PortsLayer'
 import { useWeatherLayers } from './WeatherLayer'
 import { useUserLocationLayers } from './UserLocationLayer'
 import LiveIntelligence from './LiveIntelligence'
+import AIInsightsPanel from './AIInsightsPanel'
 import { fetchAisSignals, getAisStatus, hasAisData } from '@/services/ais'
 import { fetchWeatherAlerts, getWeatherStatus, hasWeatherData } from '@/services/weather'
 import { fetchRadarTiles } from '@/services/weatherRadar'
+import { fetchNews } from '@/services/news-aggregator'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
@@ -45,6 +47,10 @@ export default function FleetMap() {
   const [followLocation, setFollowLocation] = useState(false)
   const [currentLocation, setCurrentLocation] = useState(null)
   const [locationError, setLocationError] = useState(null)
+  const [showAiInsights, setShowAiInsights] = useState(false)
+  const [aiNewsItems, setAiNewsItems] = useState([])
+  const [aiNewsLoading, setAiNewsLoading] = useState(false)
+  const [aiNewsError, setAiNewsError] = useState(null)
   const locationWatchRef = useRef(null)
   const followLocationRef = useRef(false)
 
@@ -60,6 +66,21 @@ export default function FleetMap() {
   const loadWeatherData = useCallback(async () => {
     const alerts = await fetchWeatherAlerts()
     setWeatherAlerts(alerts)
+  }, [])
+
+  // Load news for AI analysis
+  const loadAiNews = useCallback(async () => {
+    setAiNewsLoading(true)
+    setAiNewsError(null)
+    try {
+      const result = await fetchNews()
+      setAiNewsItems(result.items)
+    } catch (err) {
+      console.error('[FleetMap] AI news load failed:', err)
+      setAiNewsError('Failed to load news for AI analysis')
+    } finally {
+      setAiNewsLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -189,6 +210,13 @@ export default function FleetMap() {
     return () => clearInterval(interval)
   }, [])
 
+  // Load news when AI panel opens
+  useEffect(() => {
+    if (showAiInsights && aiNewsItems.length === 0 && !aiNewsLoading) {
+      loadAiNews()
+    }
+  }, [showAiInsights, aiNewsItems.length, aiNewsLoading, loadAiNews])
+
   const { layers: tradeRouteLayers } = useTradeRoutesLayers({
     visible: showRoutes,
     animationEnabled: showRoutes,
@@ -293,7 +321,7 @@ ${object.note || ''}`,
 
     // Weather Alert
     if (object.event !== undefined) {
-      const expiresText = object.expires ? 
+      const expiresText = object.expires ?
         `Expires: ${new Date(object.expires).toLocaleString()}` : '';
       return {
         text: `${object.event}
@@ -319,21 +347,21 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
     // Cool blue-dark palette
     setPaintIfLayerExists('background', 'background-color', '#0a1628')
 
-    ;['water', 'water_intermittent'].forEach((layerId) => {
-      setPaintIfLayerExists(layerId, 'fill-color', '#2a3442')
-    })
+      ;['water', 'water_intermittent'].forEach((layerId) => {
+        setPaintIfLayerExists(layerId, 'fill-color', '#2a3442')
+      })
 
-    ;['waterway', 'waterway_intermittent'].forEach((layerId) => {
-      setPaintIfLayerExists(layerId, 'line-color', '#36485d')
-    })
+      ;['waterway', 'waterway_intermittent'].forEach((layerId) => {
+        setPaintIfLayerExists(layerId, 'line-color', '#36485d')
+      })
 
-    ;['landcover', 'landuse', 'landuse_overlay', 'park', 'landcover_grass', 'landcover_wood'].forEach((layerId) => {
-      setPaintIfLayerExists(layerId, 'fill-color', '#12263f')
-    })
+      ;['landcover', 'landuse', 'landuse_overlay', 'park', 'landcover_grass', 'landcover_wood'].forEach((layerId) => {
+        setPaintIfLayerExists(layerId, 'fill-color', '#12263f')
+      })
 
-    ;['boundary_country', 'boundary_country_z0-4', 'boundary_country_z5-', 'boundary_state'].forEach((layerId) => {
-      setPaintIfLayerExists(layerId, 'line-color', '#355276')
-    })
+      ;['boundary_country', 'boundary_country_z0-4', 'boundary_country_z5-', 'boundary_state'].forEach((layerId) => {
+        setPaintIfLayerExists(layerId, 'line-color', '#355276')
+      })
   }, [])
 
   return (
@@ -383,7 +411,7 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           )}
         </Map>
       </DeckGL>
-      
+
       {/* Floating badges - top right */}
       <div className="map-overlay-badges">
         <span className="map-badge map-badge-green">
@@ -394,7 +422,7 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           21 Routes
         </span>
       </div>
-      
+
       {/* Floating legend - bottom left */}
       <div className="map-overlay-legend">
         <span className="legend-label">LEGEND</span>
@@ -540,6 +568,16 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           <span className="neon-glow-bottom"></span>
         </button>
 
+        <button
+          className={`neon-toggle-btn ${showAiInsights ? 'active' : ''}`}
+          onClick={() => setShowAiInsights(v => !v)}
+          title={showAiInsights ? 'Hide AI insight section' : 'Show AI insight section'}
+        >
+          <span className="neon-glow-top"></span>
+          AI Insight
+          <span className="neon-glow-bottom"></span>
+        </button>
+
         {showMyLocation && currentLocation && !followLocation && (
           <button
             className="neon-toggle-btn"
@@ -553,6 +591,20 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
         )}
 
         {locationError && <div className="location-error-pill">{locationError}</div>}
+
+        {showAiInsights && (
+          <div className="map-ai-insights-section">
+            <div className="map-ai-insights-title">AI INSIGHT</div>
+            <AIInsightsPanel
+              items={aiNewsItems}
+              isLoadingNews={aiNewsLoading}
+              newsError={aiNewsError}
+              onRefreshNews={loadAiNews}
+              compact
+              className="map-ai-insights-content"
+            />
+          </div>
+        )}
       </div>
 
       {/* Live Intelligence Panel */}
@@ -728,7 +780,33 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           backdrop-filter: blur(8px);
         }
 
-        /* Toggle Buttons Row */
+        .map-ai-insights-section {
+          margin-top: 6px;
+          width: min(460px, calc(100vw - 48px));
+          max-height: calc(100vh - 580px);
+          overflow-y: auto;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(100, 200, 255, 0.3) transparent;
+          border-radius: 12px;
+          border: 1px solid rgba(100, 200, 255, 0.28);
+          background: linear-gradient(180deg, rgba(6, 12, 24, 0.84) 0%, rgba(6, 12, 24, 0.74) 100%);
+          backdrop-filter: blur(10px);
+          box-shadow: 0 8px 28px rgba(0, 0, 0, 0.38);
+          padding: 10px 12px 12px;
+        }
+
+        .map-ai-insights-title {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 1.4px;
+          color: rgba(100, 200, 255, 0.9);
+          margin: 2px 2px 8px;
+        }
+
+        .map-ai-insights-content {
+          color: rgba(255, 255, 255, 0.92);
+        }
+
         .toggle-buttons-row {
           position: absolute;
           top: 182px;
@@ -736,6 +814,7 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           z-index: 10;
           display: flex;
           flex-direction: column;
+          align-items: flex-start;
           gap: 10px;
         }
         
@@ -744,7 +823,8 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          padding: 8px 20px;
+          width: 160px;
+          padding: 8px 16px;
           font-size: 13px;
           font-weight: 500;
           color: rgba(255, 255, 255, 0.8);

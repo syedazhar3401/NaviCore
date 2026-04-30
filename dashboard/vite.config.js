@@ -9,4 +9,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    allowedHosts: ['.myide.io'],
+  },
+  preview: {
+    allowedHosts: ['.myide.io'],
+  },
 })

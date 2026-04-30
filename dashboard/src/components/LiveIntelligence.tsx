@@ -15,7 +15,6 @@ export default function LiveIntelligence({ isOpen, onClose }: LiveIntelligencePr
   const [activeTab, setActiveTab] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isRealData, setIsRealData] = useState(false);
-  const [allNewsItems, setAllNewsItems] = useState<NewsItem[]>([]);
 
   const loadNews = useCallback(async () => {
     if (!isOpen) return;
@@ -24,7 +23,6 @@ export default function LiveIntelligence({ isOpen, onClose }: LiveIntelligencePr
     try {
       const result = await fetchNews();
       setNewsByCategory(result.byCategory);
-      setAllNewsItems(result.items || []);
       setLastUpdated(new Date());
       setIsRealData(true);
     } catch (err) {
@@ -46,7 +44,7 @@ export default function LiveIntelligence({ isOpen, onClose }: LiveIntelligencePr
 
   // Filter items based on active tab
   const filteredCategories = useMemo(() => {
-    if (activeTab === 'all' || activeTab === 'ai') return newsByCategory;
+    if (activeTab === 'all') return newsByCategory;
 
     const filtered = new Map<string, NewsItem[]>();
     newsByCategory.forEach((items, categoryId) => {
@@ -120,13 +118,7 @@ export default function LiveIntelligence({ isOpen, onClose }: LiveIntelligencePr
           <span className="li-tab-icon">☢️</span>
           Nuclear
         </button>
-        <button
-          className={`li-tab ${activeTab === 'ai' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ai')}
-        >
-          <span className="li-tab-icon">🤖</span>
-          AI Insight
-        </button>
+
       </div>
 
       {/* Content */}
@@ -147,15 +139,6 @@ export default function LiveIntelligence({ isOpen, onClose }: LiveIntelligencePr
               <code>cd backend && npm run dev</code>
             </div>
           </div>
-        ) : activeTab === 'ai' ? (
-          <AIInsightsPanel
-            items={allNewsItems}
-            isLoadingNews={isLoading}
-            newsError={error}
-            onRefreshNews={loadNews}
-            compact
-            className="li-ai-insights"
-          />
         ) : (
           <div className="li-categories">
             {!isRealData && (
@@ -245,13 +228,14 @@ export default function LiveIntelligence({ isOpen, onClose }: LiveIntelligencePr
           right: 0;
           width: 480px;
           height: 100vh;
-          background: rgba(8, 12, 20, 0.98);
-          border-left: 1px solid rgba(100, 200, 255, 0.2);
+          background: linear-gradient(180deg, rgba(8, 12, 20, 0.72) 0%, rgba(8, 12, 20, 0.66) 100%);
+          backdrop-filter: blur(8px);
+          border-left: 1px solid rgba(100, 200, 255, 0.25);
           z-index: 1000;
           display: flex;
           flex-direction: column;
           font-family: 'Inter', 'Space Grotesk', sans-serif;
-          box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
+          box-shadow: -4px 0 24px rgba(0, 0, 0, 0.38);
         }
 
         .li-header {
