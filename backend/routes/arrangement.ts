@@ -261,89 +261,110 @@ router.post('/arrangement/ai-optimize', async (req, res) => {
     // Track occupied slots
     const occupiedSlots = new Set(placedCargo.map(c => c.deckSlotId));
 
-    // Priority constraints for the loading algorithm
-    // 1. Vertical: Bottom to Top (Row 4 = lowest/best for heavy cargo)
+    // ── Priority Dimensions ───────────────────────────────────────────────
+    // Matches the 7-bay grid shown in the layout image:
+    //   Bays 1-6: 2 cols × 4 rows = 8 slots each (48 total)
+    //   Bay 7   : 2 cols × 2 rows = 4 slots (stern is smaller)
+    //   Total   : 52 slots
+    //
+    // Loop order is ROW → BAY → COL[port, starboard].
+    // Because port (C1) and starboard (C2) are the INNERMOST pair,
+    // cargo[i] and cargo[i+1] always land on OPPOSITE SIDES of the same
+    // bay+row position — the ship is balanced pair-by-pair automatically.
+
+    // Vertical: bottom row first (Row 4 is lowest deck = best for heavy cargo)
     const ROW_PRIORITY = [4, 3, 2, 1];
-    // 2. Longitudinal: Center radiating outward (Bay 4 = center of 7 bays)
+
+    // Longitudinal: midship (Bay 4) first, radiate outward.
+    // Bay 7 (stern) loaded before Bay 1 (bow) for better trim dynamics.
     const BAY_PRIORITY = [4, 3, 5, 2, 6, 7, 1];
-    // 3. Transverse: Port (C1) then Starboard (C2) - paired immediately for balance
+
+    // Transverse: port (C1) immediately followed by starboard (C2).
+    // Keeping these together is what creates self-balancing pairs.
     const COL_PRIORITY = [1, 2];
 
     /**
-     * Generates the master priority list of slots based on maritime physics.
-     * Heaviest cargo gets the lowest slots in the center bays, with port/starboard paired.
+     * Generates an ordered list of PORT/STARBOARD slot PAIRS.
+     * Each entry is one loading position — both sides of the vessel at
+     * the same bay+row.  Processing pairs (not a flat slot list) ensures
+     * lateral balance is maintained even when some slots are already occupied.
+     *
+     * Grid geometry exceptions:
+     *   Bay 7 only exists on rows 1 & 2 (stern bay is a 2×2 block).
      */
-    function generateDesirabilityArray(): string[] {
-      const prioritySlots: string[] = [];
-
+    function generateSlotPairs(): Array<{ port: string; starboard: string }> {
+      const pairs: Array<{ port: string; starboard: string }> = [];
       for (const row of ROW_PRIORITY) {
         for (const bay of BAY_PRIORITY) {
-          // Bay 7 only has Rows 1 & 2 (stern is smaller)
-          if (bay === 7 && (row === 4 || row === 3)) {
-            continue;
-          }
-
-          for (const col of COL_PRIORITY) {
-            prioritySlots.push(`B${bay}-R${row}-C${col}`);
-          }
+          if (bay === 7 && (row === 4 || row === 3)) continue; // Bay 7 has no rows 3-4
+          pairs.push({
+            port:      `B${bay}-R${row}-C1`,
+            starboard: `B${bay}-R${row}-C2`,
+          });
         }
       }
-
-      return prioritySlots;
+      return pairs;
     }
 
-    // Generate the optimal slot sequence
-    const optimalSlots = generateDesirabilityArray();
+    const allPairs   = generateSlotPairs();
+    // For balance stats we still expose the flat list
+    const optimalSlots = allPairs.flatMap(p => [p.port, p.starboard]);
 
-    // Filter out already occupied slots
-    const availableOptimalSlots = optimalSlots.filter(s => !occupiedSlots.has(s));
-
-    // Sort cargo by weight, Heaviest to Lightest
-    // This ensures heaviest cargo gets the most desirable slots (lowest, centered)
+    // Sort cargo heaviest-first so the most desirable positions get the heaviest items
     const sortedCargo = [...unplacedCargo].sort((a, b) => b.weightKg - a.weightKg);
 
-    // Assign cargo to slots sequentially (best-effort)
     const proposed: { cargoId: string; deckSlotId: string }[] = [];
+    let cargoIdx = 0;
 
-    const assignableCount = Math.min(sortedCargo.length, availableOptimalSlots.length);
+    for (const pair of allPairs) {
+      if (cargoIdx >= sortedCargo.length) break;
 
-    for (let i = 0; i < assignableCount; i++) {
-      const cargoItem = sortedCargo[i];
-      const assignedSlot = availableOptimalSlots[i];
-      if (!cargoItem || !assignedSlot) continue;
+      const portFree      = !occupiedSlots.has(pair.port);
+      const starboardFree = !occupiedSlots.has(pair.starboard);
 
-      proposed.push({
-        cargoId: cargoItem.id,
-        deckSlotId: assignedSlot,
-      });
+      if (portFree && starboardFree) {
+        // ── Both sides free: assign the next TWO items as a matched pair ──
+        // cargo[i]   → port,      cargo[i+1] → starboard
+        // This is the self-balancing step: heaviest pair shares the same position.
+        const itemA = sortedCargo[cargoIdx];
+        const itemB = sortedCargo[cargoIdx + 1];
+
+        if (itemA) { proposed.push({ cargoId: itemA.id, deckSlotId: pair.port });      cargoIdx++; }
+        if (itemB) { proposed.push({ cargoId: itemB.id, deckSlotId: pair.starboard }); cargoIdx++; }
+
+      } else if (portFree) {
+        // Starboard already occupied — fill port only
+        const item = sortedCargo[cargoIdx];
+        if (item) { proposed.push({ cargoId: item.id, deckSlotId: pair.port }); cargoIdx++; }
+
+      } else if (starboardFree) {
+        // Port already occupied — fill starboard only
+        const item = sortedCargo[cargoIdx];
+        if (item) { proposed.push({ cargoId: item.id, deckSlotId: pair.starboard }); cargoIdx++; }
+      }
+      // Both occupied → skip this pair, no cargo consumed
     }
 
-    const unassignedCargo = sortedCargo.slice(assignableCount);
+    const unassignedCargo = sortedCargo.slice(cargoIdx);
 
-    // Calculate final balance statistics
-    const getSideWeights = () => {
-      let port = 0, starboard = 0;
-      // Include both previously placed and newly proposed cargo
-      for (const item of placedCargo) {
-        if (!item.deckSlotId) continue;
-        const col = parseInt(item.deckSlotId.match(/C(\d+)/)?.[1] || '0');
-        if (col === 1) port += item.weightKg;
-        else starboard += item.weightKg;
-      }
-      for (const prop of proposed) {
-        const cargo = sortedCargo.find(c => c.id === prop.cargoId);
-        if (cargo) {
-          const col = parseInt(prop.deckSlotId.match(/C(\d+)/)?.[1] || '0');
-          if (col === 1) port += cargo.weightKg;
-          else starboard += cargo.weightKg;
-        }
-      }
-      return { port, starboard };
-    };
+    // ── Balance statistics ────────────────────────────────────────────────
+    let portWeight = 0;
+    let starboardWeight = 0;
 
-    const finalWeights = getSideWeights();
-    const totalWeight = finalWeights.port + finalWeights.starboard;
-    const portPercentage = totalWeight > 0 ? Math.round((finalWeights.port / totalWeight) * 100) : 50;
+    for (const item of placedCargo) {
+      if (!item.deckSlotId) continue;
+      if (item.deckSlotId.endsWith('-C1')) portWeight      += item.weightKg;
+      else                                starboardWeight  += item.weightKg;
+    }
+    for (const prop of proposed) {
+      const cargo = sortedCargo.find(c => c.id === prop.cargoId);
+      if (!cargo) continue;
+      if (prop.deckSlotId.endsWith('-C1')) portWeight     += cargo.weightKg;
+      else                                starboardWeight += cargo.weightKg;
+    }
+
+    const totalWeight    = portWeight + starboardWeight;
+    const portPercentage = totalWeight > 0 ? Math.round((portWeight / totalWeight) * 100) : 50;
 
     // Simulate processing delay for UX
     await new Promise(r => setTimeout(r, 600));
@@ -361,23 +382,24 @@ router.post('/arrangement/ai-optimize', async (req, res) => {
         })),
       },
       balance: {
-        portWeight: finalWeights.port,
-        starboardWeight: finalWeights.starboard,
+        portWeight,
+        starboardWeight,
         portPercentage,
         starboardPercentage: 100 - portPercentage,
       },
-      algorithm: 'Maritime Center-Out Optimizer v4.0',
+      algorithm: 'Maritime Center-Out, Bottom-Up Optimizer v5.0',
       principles: [
-        'Bottom-Up: Heavy cargo placed in lowest rows (R4->R1) for vertical stability',
-        'Center-Out: Loading radiates from Bay 4 (center) to extremities (B1, B7)',
-        'Port-Starboard Pairs: C1 and C2 assigned sequentially for lateral balance',
-        'Heavy-First: Sorting by weight ensures optimal weight distribution',
-        'Bay 7 Exception: Stern bay only has rows 1-2'
+        'Bottom-Up: Heavy cargo placed in lowest rows (R4→R1) for vertical stability',
+        'Center-Out: Loading radiates from midship Bay 4 to extremities (B1, B7)',
+        'Self-Balancing Pairs: Each (bay, row) position is processed as a port+starboard pair — cargo[i] and cargo[i+1] always land on opposite sides of the same position',
+        'Heavy-First Sort: Heaviest items claim the most desirable (lowest, centred) slots',
+        'Bay 7 Exception: Stern bay is a 2×2 block — rows 3 & 4 are skipped',
+        'Stern-before-Bow: Bay 7 loaded before Bay 1 for better trim dynamics',
       ],
       loadingSequence: {
-        totalSlots: optimalSlots.length,
-        availableSlots: availableOptimalSlots.length,
-        cargoAssigned: proposed.length,
+        totalPairs:      allPairs.length,
+        totalSlots:      optimalSlots.length,
+        cargoAssigned:   proposed.length,
         cargoUnassigned: unassignedCargo.length,
       }
     });
