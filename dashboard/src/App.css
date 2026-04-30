@@ -21,6 +21,31 @@
   overflow: hidden;
 }
 
+.app-page-title-panel {
+  position: fixed;
+  top: 16px;
+  left: 24px;
+  z-index: 210;
+  pointer-events: none;
+}
+
+.app-page-title {
+  margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.3px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.app-page-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: rgba(175, 204, 235, 0.86);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
 /* --- TOP NAVIGATION DOCK --- */
 .top-dock {
   position: fixed;
@@ -121,7 +146,7 @@
 .app-status-pill {
   position: fixed;
   top: 16px;
-  left: 16px;
+  right: 16px;
   z-index: 200;
   display: flex;
   align-items: center;
@@ -319,6 +344,10 @@
 .page-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   margin-bottom: 24px;
+}
+
+.app-main > .fade-in .page-header {
+  display: none;
 }
 .page-title { font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; }
 .page-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }

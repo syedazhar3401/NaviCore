@@ -211,9 +211,10 @@ const CargoArrangement = () => {
 
   const handleSaveLayout = async () => {
     try {
-      const slots = cargo
-        .filter(c => c.deckSlotId)
-        .map(c => ({ cargoId: c.id, deckSlotId: c.deckSlotId }));
+      const slots = cargo.map(c => ({
+        cargoId: c.id,
+        deckSlotId: c.deckSlotId || null,
+      }));
       
       await fetch(`${BACKEND_URL}/api/arrangement/layout`, {
         method: 'PUT',
@@ -321,64 +322,6 @@ const CargoArrangement = () => {
         display: 'flex',
         flexDirection: 'column',
       }}>
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '16px 24px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-          backgroundColor: 'rgba(0,0,0,0.2)',
-          backdropFilter: 'blur(4px)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <h1 style={{ 
-              color: 'white', 
-              fontSize: '20px',
-              fontWeight: 'bold'
-            }}>
-              Cargo Arrangement
-            </h1>
-            
-            {/* Voyage Selector */}
-            <div style={{ position: 'relative' }}>
-              <select
-                value={selectedVoyageId}
-                onChange={(e) => setSelectedVoyageId(e.target.value)}
-                style={{
-                  padding: '8px 32px 8px 12px',
-                  backgroundColor: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '6px',
-                  color: 'white',
-                  fontSize: '13px',
-                  appearance: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {voyages.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.vessel?.name} — {v.originPort} → {v.destinationPort}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} style={{
-                position: 'absolute',
-                right: '10px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--text-secondary)',
-                pointerEvents: 'none',
-              }} />
-            </div>
-          </div>
-
-          {/* Stability Score */}
-          {balanceData && (
-            <StabilityGauge score={balanceData.stabilityScore} />
-          )}
-        </div>
-
         {/* Main Content */}
         <div style={{
           flex: 1,
@@ -487,13 +430,62 @@ const CargoArrangement = () => {
             backgroundColor: 'rgba(10,25,41,0.3)',
             backdropFilter: 'blur(4px)',
             overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
           }}>
-            <CargoDetailPanel
+            <div style={{
+              padding: '16px 16px 14px',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+            }}>
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={selectedVoyageId}
+                  onChange={(e) => setSelectedVoyageId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 32px 9px 12px',
+                    backgroundColor: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '6px',
+                    color: 'white',
+                    fontSize: '12px',
+                    appearance: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {voyages.map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.vessel?.name} — {v.originPort} → {v.destinationPort}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={14} style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-secondary)',
+                  pointerEvents: 'none',
+                }} />
+              </div>
+
+              {balanceData && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <StabilityGauge score={balanceData.stabilityScore} />
+                </div>
+              )}
+            </div>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <CargoDetailPanel
               cargo={selectedCargo}
               onEdit={handleEditCargo}
               onDelete={handleDeleteCargo}
               onRemoveFromSlot={handleRemoveFromSlot}
-            />
+              />
+            </div>
           </div>
         </div>
       </div>

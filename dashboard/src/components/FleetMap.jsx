@@ -251,12 +251,6 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
         </Map>
       </DeckGL>
       
-      {/* Floating header - top left */}
-      <div className="map-overlay-header">
-        <h1 className="map-title">Global Maritime Intelligence</h1>
-        <p className="map-subtitle">Real-time threat monitoring and vessel tracking</p>
-      </div>
-      
       {/* Floating badges - top right */}
       <div className="map-overlay-badges">
         <span className="map-badge map-badge-green">

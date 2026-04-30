@@ -19,6 +19,41 @@ const MOCK_VESSELS = [
   { id: '2', name: 'NaviCore Titan', currentLat: 12.5, currentLng: 54.2, status: 'AT_PORT' },
 ]
 
+const PAGE_META = {
+  fleet: {
+    title: 'Global Maritime Intelligence',
+    subtitle: 'Real-time threat monitoring and vessel tracking',
+  },
+  voyage: {
+    title: 'Voyage Overview',
+    subtitle: 'Live vessel status and route monitoring',
+  },
+  weather: {
+    title: 'Weather & Risk Intel',
+    subtitle: 'Maritime weather intelligence and route risk analysis',
+  },
+  fuel: {
+    title: 'Fuel Stop Optimizer',
+    subtitle: 'Compare bunker ports and optimize refueling decisions',
+  },
+  cost: {
+    title: 'Voyage Cost Ledger',
+    subtitle: 'Live running total — NaviCore One · Singapore → Rotterdam',
+  },
+  arrangement: {
+    title: 'Cargo Arrangement',
+    subtitle: 'Plan deck slot placement and vessel stability',
+  },
+  feed: {
+    title: 'Live Loading Feed',
+    subtitle: 'Real-time deckhand QR scan events',
+  },
+  crew: {
+    title: 'Crew Roster',
+    subtitle: 'Crew assignments and live duty status',
+  },
+}
+
 export default function App() {
   const [activeView, setActiveView] = useState('fleet')
   const [feedEvents, setFeedEvents] = useState([])
@@ -128,8 +163,14 @@ export default function App() {
     arrangement: <CargoArrangement />,
   }
 
+  const activePage = PAGE_META[activeView] || PAGE_META.fleet
+
   return (
     <div className="app-layout">
+      <div className="app-page-title-panel">
+        <h1 className="app-page-title">{activePage.title}</h1>
+        <p className="app-page-subtitle">{activePage.subtitle}</p>
+      </div>
       <AppStatusPill connectionStatus={connectionStatus} />
       <TopDock
         activeView={activeView}
