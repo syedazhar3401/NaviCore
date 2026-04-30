@@ -5,6 +5,7 @@ import { useTradeRoutesLayers } from './TradeRoutesLayer'
 import { useAisLayers } from './AisLayer'
 import { usePortsLayers } from './PortsLayer'
 import { useWeatherLayers } from './WeatherLayer'
+import { useUserLocationLayers } from './UserLocationLayer'
 import LiveIntelligence from './LiveIntelligence'
 import { fetchAisSignals, getAisStatus, hasAisData } from '@/services/ais'
 import { fetchWeatherAlerts, getWeatherStatus, hasWeatherData } from '@/services/weather'
@@ -21,6 +22,12 @@ const INITIAL_VIEW = {
   bearing: 0,
 }
 
+const GEOLOCATION_OPTIONS = {
+  enableHighAccuracy: true,
+  timeout: 10000,
+  maximumAge: 5000,
+}
+
 export default function FleetMap() {
   const [showRoutes, setShowRoutes] = useState(true)
   const [showPorts, setShowPorts] = useState(true)
@@ -33,6 +40,13 @@ export default function FleetMap() {
   const [weatherAlerts, setWeatherAlerts] = useState([])
   const [radarTileUrl, setRadarTileUrl] = useState(null)
   const [aisStatus, setAisStatus] = useState({ connected: false, vessels: 0, messages: 0 })
+  const [viewState, setViewState] = useState(INITIAL_VIEW)
+  const [showMyLocation, setShowMyLocation] = useState(false)
+  const [followLocation, setFollowLocation] = useState(false)
+  const [currentLocation, setCurrentLocation] = useState(null)
+  const [locationError, setLocationError] = useState(null)
+  const locationWatchRef = useRef(null)
+  const followLocationRef = useRef(false)
 
   // Manual fetch function for AIS - only called when user toggles on
   const loadAisData = useCallback(async () => {
@@ -47,6 +61,102 @@ export default function FleetMap() {
     const alerts = await fetchWeatherAlerts()
     setWeatherAlerts(alerts)
   }, [])
+
+  useEffect(() => {
+    followLocationRef.current = followLocation
+  }, [followLocation])
+
+  const stopLocationWatch = useCallback(() => {
+    if (locationWatchRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(locationWatchRef.current)
+      locationWatchRef.current = null
+    }
+  }, [])
+
+  const startLocationWatch = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by this browser.')
+      return
+    }
+
+    if (locationWatchRef.current !== null) {
+      return
+    }
+
+    setLocationError(null)
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setLocationError(null)
+
+        const nextLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy || 30,
+          heading: position.coords.heading,
+          timestamp: position.timestamp,
+        }
+
+        setCurrentLocation(nextLocation)
+
+        if (followLocationRef.current) {
+          setViewState(prev => ({
+            ...prev,
+            longitude: nextLocation.longitude,
+            latitude: nextLocation.latitude,
+            zoom: Math.max(prev.zoom || INITIAL_VIEW.zoom, 9),
+          }))
+        }
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationError('Location permission denied.')
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          setLocationError('Unable to determine current location.')
+        } else if (error.code === error.TIMEOUT) {
+          setLocationError('Location request timed out.')
+        } else {
+          setLocationError('Location tracking failed.')
+        }
+
+        setShowMyLocation(false)
+        setFollowLocation(false)
+        stopLocationWatch()
+      },
+      GEOLOCATION_OPTIONS,
+    )
+
+    locationWatchRef.current = watchId
+  }, [stopLocationWatch])
+
+  const recenterToCurrentLocation = useCallback(() => {
+    if (!currentLocation) return
+
+    setFollowLocation(true)
+    setViewState(prev => ({
+      ...prev,
+      longitude: currentLocation.longitude,
+      latitude: currentLocation.latitude,
+      zoom: Math.max(prev.zoom || INITIAL_VIEW.zoom, 9),
+    }))
+  }, [currentLocation])
+
+  useEffect(() => {
+    if (!showMyLocation) {
+      setFollowLocation(false)
+      stopLocationWatch()
+      return
+    }
+
+    setFollowLocation(true)
+    startLocationWatch()
+  }, [showMyLocation, startLocationWatch, stopLocationWatch])
+
+  useEffect(() => {
+    return () => {
+      stopLocationWatch()
+    }
+  }, [stopLocationWatch])
 
   // Handle AIS toggle - fetch only when turning on and data hasn't been fetched yet
   useEffect(() => {
@@ -110,10 +220,22 @@ export default function FleetMap() {
     showPolygons: false, // Disable polygons for now, just show centroids
   })
 
-  const allLayers = [...tradeRouteLayers, ...aisLayers, ...portsLayers, ...weatherLayers]
+  const userLocationLayers = useUserLocationLayers({
+    location: currentLocation,
+    visible: showMyLocation && !!currentLocation,
+  })
+
+  const allLayers = [...tradeRouteLayers, ...aisLayers, ...portsLayers, ...weatherLayers, ...userLocationLayers]
 
   const getTooltip = useCallback(({ object }) => {
     if (!object) return null
+
+    if (object.isUserLocation) {
+      return {
+        text: `Your Location
+Accuracy: ${Math.round(object.accuracy || 0)}m`,
+      }
+    }
 
     if (object.routeId) {
       // Trade route segment
@@ -218,7 +340,18 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
     <div className="fleet-map-fullscreen">
       {/* Full-screen map container */}
       <DeckGL
-        initialViewState={INITIAL_VIEW}
+        viewState={viewState}
+        onViewStateChange={({ viewState: nextViewState, interactionState }) => {
+          setViewState(nextViewState)
+
+          if (
+            followLocation &&
+            interactionState &&
+            (interactionState.isDragging || interactionState.isPanning || interactionState.isZooming || interactionState.isRotating)
+          ) {
+            setFollowLocation(false)
+          }
+        }}
         controller={true}
         layers={allLayers}
         getTooltip={getTooltip}
@@ -290,6 +423,12 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
             <span className="legend-dot" style={{ background: '#ff0000' }}></span>
             <span>Weather Alert</span>
           </div>
+          {showMyLocation && currentLocation && (
+            <div className="legend-item">
+              <span className="legend-location">⛴</span>
+              <span>My Location</span>
+            </div>
+          )}
           {showWeather && (
             <div className="legend-item">
               <span className="legend-radar"></span>
@@ -381,6 +520,39 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           Intelligence
           <span className="neon-glow-bottom"></span>
         </button>
+
+        <button
+          className={`neon-toggle-btn ${showMyLocation ? 'active' : ''}`}
+          onClick={() => {
+            if (showMyLocation) {
+              setShowMyLocation(false)
+              setCurrentLocation(null)
+              setLocationError(null)
+            } else {
+              setShowMyLocation(true)
+              setLocationError(null)
+            }
+          }}
+          title={showMyLocation ? 'Stop location tracking' : 'Track my location'}
+        >
+          <span className="neon-glow-top"></span>
+          My Location
+          <span className="neon-glow-bottom"></span>
+        </button>
+
+        {showMyLocation && currentLocation && !followLocation && (
+          <button
+            className="neon-toggle-btn"
+            onClick={recenterToCurrentLocation}
+            title="Recenter map to your current location"
+          >
+            <span className="neon-glow-top"></span>
+            Recenter
+            <span className="neon-glow-bottom"></span>
+          </button>
+        )}
+
+        {locationError && <div className="location-error-pill">{locationError}</div>}
       </div>
 
       {/* Live Intelligence Panel */}
@@ -530,6 +702,30 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           border-radius: 2px;
           background: linear-gradient(135deg, #00b4db 0%, #0083b0 50%, #ffd700 100%);
           border: 1px solid rgba(255,255,255,0.4);
+        }
+
+        .legend-location {
+          width: 14px;
+          height: 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          color: #00e6ff;
+        }
+
+        .location-error-pill {
+          margin-top: 2px;
+          max-width: 220px;
+          padding: 8px 12px;
+          border-radius: 8px;
+          background: rgba(255, 82, 82, 0.18);
+          border: 1px solid rgba(255, 82, 82, 0.45);
+          color: #ffd4d4;
+          font-size: 12px;
+          font-weight: 500;
+          line-height: 1.3;
+          backdrop-filter: blur(8px);
         }
 
         /* Toggle Buttons Row */
