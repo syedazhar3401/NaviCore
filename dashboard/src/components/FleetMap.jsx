@@ -56,13 +56,10 @@ export default function FleetMap() {
 
   // Manual fetch function for AIS - only called when user toggles on
   const loadAisData = useCallback(async () => {
-    console.log('[FleetMap] loadAisData called');
     const { disruptions, density } = await fetchAisSignals()
-    console.log('[FleetMap] fetchAisSignals returned:', { disruptionsCount: disruptions.length, densityCount: density.length });
     setAisDisruptions(disruptions)
     setAisDensity(density)
     setAisStatus(getAisStatus())
-    console.log('[FleetMap] State updated with new data');
   }, [])
 
   // Manual fetch function for Weather - only called when user toggles on
@@ -184,13 +181,9 @@ export default function FleetMap() {
 
   // Handle AIS toggle - fetch only when turning on and data hasn't been fetched yet
   useEffect(() => {
-    console.log('[FleetMap] AIS useEffect - showAisDensity:', showAisDensity, 'showAisDisruptions:', showAisDisruptions, 'hasAisData():', hasAisData());
     if (showAisDensity || showAisDisruptions) {
       if (!hasAisData()) {
-        console.log('[FleetMap] Fetching AIS data...');
         loadAisData()
-      } else {
-        console.log('[FleetMap] AIS data already fetched, skipping');
       }
     }
   }, [showAisDensity, showAisDisruptions, loadAisData])
@@ -230,7 +223,6 @@ export default function FleetMap() {
     showChokepoints: showRoutes,
   })
 
-  console.log('[FleetMap] Before useAisLayers - aisDisruptions.length:', aisDisruptions.length, 'showAisDisruptions:', showAisDisruptions);
   const aisLayers = useAisLayers({
     disruptions: aisDisruptions,
     density: aisDensity,

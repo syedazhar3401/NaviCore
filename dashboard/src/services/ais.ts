@@ -5,10 +5,46 @@ import { MOCK_AIS_DENSITY, MOCK_AIS_DISRUPTIONS } from '@/config/ais-mock-data';
 const AISSTREAM_API_KEY = import.meta.env.VITE_AISSTREAM_API_KEY || '';
 const USE_MOCK_DATA = true; // Set to false when you have real API
 
+const STORAGE_KEY = 'navicore_ais_data';
+
 // State
 let latestDisruptions: AisDisruptionEvent[] = [];
 let latestDensity: AisDensityZone[] = [];
 let hasFetched = false;
+
+/**
+ * Load data from localStorage on module init
+ */
+function loadFromStorage(): void {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.disruptions && parsed.density) {
+        latestDisruptions = parsed.disruptions;
+        latestDensity = parsed.density;
+        hasFetched = true;
+        console.log('[AIS] Loaded from localStorage:', { disruptions: latestDisruptions.length, density: latestDensity.length });
+      }
+    }
+  } catch (e) {
+    console.warn('[AIS] Failed to load from localStorage:', e);
+  }
+}
+
+/**
+ * Save data to localStorage
+ */
+function saveToStorage(): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      disruptions: latestDisruptions,
+      density: latestDensity,
+    }));
+  } catch (e) {
+    console.warn('[AIS] Failed to save to localStorage:', e);
+  }
+}
 
 /**
  * Initialize with mock data
@@ -16,6 +52,7 @@ let hasFetched = false;
 function initWithMockData(): void {
   latestDensity = [...MOCK_AIS_DENSITY];
   latestDisruptions = [...MOCK_AIS_DISRUPTIONS];
+  saveToStorage();
 }
 
 /**
@@ -34,17 +71,20 @@ export async function fetchAisSignals(): Promise<{
     await fetchRealAisData();
   }
   hasFetched = true;
-  return {
+  const result = {
     disruptions: latestDisruptions,
     density: latestDensity,
   };
+  console.log('[AIS] fetchAisSignals returning:', { disruptions: result.disruptions.length, density: result.density.length });
+  return result;
 }
 
 /**
- * Check if AIS data has been fetched at least once
+ * Check if AIS data has been fetched AND has actual content
  */
 export function hasAisData(): boolean {
-  return hasFetched;
+  // Check both the flag AND that arrays have content
+  return hasFetched && latestDisruptions.length > 0 && latestDensity.length > 0;
 }
 
 // Deprecated: No longer used - manual fetch only
@@ -65,11 +105,11 @@ async function fetchRealAisData(): Promise<void> {
     console.warn('[AIS] No API key configured');
     return;
   }
-  
+
   // Example: Connect to AISStream WebSocket
   // const ws = new WebSocket(`wss://stream.aisstream.io/v1/stream?apiKey=${AISSTREAM_API_KEY}`);
   // ... handle messages
-  
+
   // Or use your backend relay
   // const response = await fetch('/api/ais/snapshot');
   // const data = await response.json();
@@ -82,10 +122,25 @@ async function fetchRealAisData(): Promise<void> {
  */
 export function getAisStatus(): AisStatus {
   return {
-    connected: hasFetched,
+    connected: hasAisData(),
     vessels: latestDensity.reduce((sum, z) => sum + (z.shipsPerDay || 0), 0),
-    messages: hasFetched ? Math.floor(Math.random() * 50000) + 10000 : 0,
+    messages: hasAisData() ? Math.floor(Math.random() * 50000) + 10000 : 0,
   };
+}
+
+/**
+ * Clear stored AIS data (useful for debugging)
+ */
+export function clearAisData(): void {
+  latestDisruptions = [];
+  latestDensity = [];
+  hasFetched = false;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (e) {
+    // ignore
+  }
+  console.log('[AIS] Data cleared');
 }
 
 /**
@@ -113,3 +168,6 @@ export function registerAisCallback(callback: AisPositionCallback): void {
 export function unregisterAisCallback(callback: AisPositionCallback): void {
   positionCallbacks.delete(callback);
 }
+
+// Load from storage on module initialization
+loadFromStorage();

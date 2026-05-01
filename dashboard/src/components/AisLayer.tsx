@@ -15,9 +15,6 @@ export function useAisLayers({
   showDensity = true,
   showDisruptions = true,
 }: AisLayerProps) {
-  // Debug logging
-  console.log('[useAisLayers] Props:', { showDensity, showDisruptions, densityCount: density.length, disruptionsCount: disruptions.length });
-
   // AIS Density Layer (traffic heatmap)
   const densityLayer = useMemo(() => {
     if (!showDensity || density.length === 0) return null;
@@ -46,7 +43,6 @@ export function useAisLayers({
 
   // AIS Disruptions Layer (spoofing, gaps)
   const disruptionsLayer = useMemo(() => {
-    console.log('[useAisLayers] disruptionsLayer memo - showDisruptions:', showDisruptions, 'disruptions.length:', disruptions.length);
     if (!showDisruptions || disruptions.length === 0) return null;
 
     return new ScatterplotLayer<AisDisruptionEvent>({
@@ -73,9 +69,7 @@ export function useAisLayers({
     });
   }, [disruptions, showDisruptions]);
 
-  const result = [densityLayer, disruptionsLayer].filter(Boolean);
-  console.log('[useAisLayers] Returning layers:', result.length, 'disruptionsLayer:', disruptionsLayer ? 'present' : 'null');
-  return result;
+  return [densityLayer, disruptionsLayer].filter(Boolean);
 }
 
 export default useAisLayers;
