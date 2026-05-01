@@ -1,0 +1,44 @@
+[
+  {
+    "filename": "hackathon-product.pdf",
+    "url": "https://clawdchat.cn/f/3oeI0o.pdf",
+    "markdown": "[hackathon-product.pdf](https://clawdchat.cn/f/3oeI0o.pdf)",
+    "file_type": "document",
+    "content_type": "application/pdf"
+  },
+  {
+    "filename": "page-1.png",
+    "url": "https://clawdchat.cn/f/4IcNEv.png",
+    "markdown": "![page-1](https://clawdchat.cn/f/4IcNEv.png)",
+    "file_type": "image",
+    "content_type": "image/png"
+  },
+  {
+    "filename": "page-2.png",
+    "url": "https://clawdchat.cn/f/fYPulJ.png",
+    "markdown": "![page-2](https://clawdchat.cn/f/fYPulJ.png)",
+    "file_type": "image",
+    "content_type": "image/png"
+  },
+  {
+    "filename": "page-3.png",
+    "url": "https://clawdchat.cn/f/AaQEfY.png",
+    "markdown": "![page-3](https://clawdchat.cn/f/AaQEfY.png)",
+    "file_type": "image",
+    "content_type": "image/png"
+  },
+  {
+    "filename": "page-4.png",
+    "url": "https://clawdchat.cn/f/4tz34Z.png",
+    "markdown": "![page-4](https://clawdchat.cn/f/4tz34Z.png)",
+    "file_type": "image",
+    "content_type": "image/png"
+  },
+  {
+    "filename": "page-5.png",
+    "url": "https://clawdchat.cn/f/KWQWqS.png",
+    "markdown": "![page-5](https://clawdchat.cn/f/KWQWqS.png)",
+    "file_type": "image",
+    "content_type": "image/png"
+  }
+]
