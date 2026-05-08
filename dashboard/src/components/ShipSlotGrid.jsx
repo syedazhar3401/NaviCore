@@ -60,8 +60,8 @@ const ShipSlotGrid = ({
           const occupyingCargo = slotCargoMap[slotId];
           const color = slotColors?.[slotId] || 'blue';
           
-          // Planning logic: if it's placed now, but wasn't in this slot initially
-          const isPlanning = occupyingCargo && initialLayout?.[occupyingCargo.id] !== slotId;
+          // Planning logic: use the isPlanned property persisted on the cargo object
+          const isPlanning = occupyingCargo && occupyingCargo.isPlanned;
           
           const proposedCargoId = proposedSlots?.[slotId];
           const proposedCargoExists = proposedCargoId && cargo.some((c) => c.id === proposedCargoId);
@@ -119,8 +119,8 @@ const ShipSlotGrid = ({
           gap: '12px' 
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-             <div style={{ width: 10, height: 10, border: '1px solid rgba(255,255,255,0.4)', borderRadius: 2 }} />
-             <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}>Manifested</span>
+             <div style={{ width: 10, height: 10, border: '1px solid #4caf50', backgroundColor: 'rgba(76, 175, 80, 0.2)', borderRadius: 2, boxShadow: '0 0 5px rgba(76, 175, 80, 0.4)' }} />
+             <span style={{ fontSize: 9, color: '#4caf50', fontWeight: 'bold' }}>Loaded</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
              <div style={{ width: 10, height: 10, border: '1px dashed #f0b429', borderRadius: 2, boxShadow: '0 0 5px #f0b429' }} />
@@ -164,7 +164,9 @@ const Slot = ({
       borderColor = '#f0b429';
       boxShadow = '0 0 10px rgba(240, 180, 41, 0.4)';
     } else {
-      borderColor = 'rgba(255,255,255,0.1)';
+      borderStyle = 'solid';
+      borderColor = '#4caf50';
+      boxShadow = '0 0 8px rgba(76, 175, 80, 0.4)';
     }
   } else if (isPendingTarget) {
     opacity = 0.85;
@@ -176,10 +178,11 @@ const Slot = ({
     borderStyle = 'dashed';
     borderColor = '#9c27b0';
   } else if (selectedCargoId && !isOccupied) {
-    // Available for placement
+    // Available for placement - Match the "Planning" style as requested
     opacity = 0.6;
-    borderColor = 'var(--cyan-glow)';
-    boxShadow = '0 0 10px rgba(0,212,255,0.3)';
+    borderStyle = 'dashed';
+    borderColor = '#f0b429';
+    boxShadow = '0 0 10px rgba(240, 180, 41, 0.3)';
   }
 
   if (isSelected) {

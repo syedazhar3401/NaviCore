@@ -6,7 +6,7 @@ import CargoManifestPanel from './CargoManifestPanel';
 import ShipSlotGrid from './ShipSlotGrid';
 import CargoDetailPanel from './CargoDetailPanel';
 import CargoFormModal from './CargoFormModal';
-import { calculateBalance } from '../utils/balanceEngine.js';
+import { calculateBalance, runAIOptimizer } from '../utils/balanceEngine.js';
 
 const BACKEND_URL = 'http://localhost:4000';
 
@@ -14,30 +14,15 @@ const BACKEND_URL = 'http://localhost:4000';
 const MOCK_VOYAGES = [
   {
     id: 'voyage-1',
-    vessel: { name: 'MV Pacific Star' },
-    originPort: 'Shanghai',
-    destinationPort: 'Los Angeles',
+    vessel: { name: 'NaviCore One' },
+    originPort: 'Singapore',
+    destinationPort: 'Rotterdam',
     departureDate: '2026-05-15',
     arrivalDate: '2026-05-30',
-  },
-  {
-    id: 'voyage-2',
-    vessel: { name: 'SS Atlantic Voyager' },
-    originPort: 'Rotterdam',
-    destinationPort: 'New York',
-    departureDate: '2026-05-18',
-    arrivalDate: '2026-05-28',
-  },
+  }
 ];
 
-const MOCK_CARGO = [
-  { id: 'cargo-1', voyageId: 'voyage-1', name: 'Electronics Container', weight: 2500, category: 'ELECTRONICS', loadStatus: 'MANIFESTED', deckSlotId: null },
-  { id: 'cargo-2', voyageId: 'voyage-1', name: 'Auto Parts', weight: 3200, category: 'AUTOMOTIVE', loadStatus: 'LOADED', deckSlotId: 'D-03-04' },
-  { id: 'cargo-3', voyageId: 'voyage-1', name: 'Textile Goods', weight: 1800, category: 'TEXTILES', loadStatus: 'MANIFESTED', deckSlotId: null },
-  { id: 'cargo-4', voyageId: 'voyage-1', name: 'Machinery Parts', weight: 4500, category: 'MACHINERY', loadStatus: 'LOADED', deckSlotId: 'D-05-06' },
-  { id: 'cargo-5', voyageId: 'voyage-1', name: 'Chemical Drums', weight: 2100, category: 'CHEMICALS', loadStatus: 'MANIFESTED', deckSlotId: null },
-  { id: 'cargo-6', voyageId: 'voyage-1', name: 'Food Products', weight: 1500, category: 'FOOD', loadStatus: 'LOADED', deckSlotId: 'D-02-03' },
-];
+
 
 const dedupeVoyages = (voyageList = []) => {
   const seen = new Set();
@@ -52,11 +37,12 @@ const dedupeVoyages = (voyageList = []) => {
   });
 };
 
-const CargoArrangement = () => {
+const CargoArrangement = ({ globalCargo, setGlobalCargo }) => {
   // State
   const [voyages, setVoyages] = useState([]);
   const [selectedVoyageId, setSelectedVoyageId] = useState('');
-  const [cargo, setCargo] = useState([]);
+  const cargo = globalCargo || [];
+  const setCargo = setGlobalCargo || (() => {});
   const [initialLayout, setInitialLayout] = useState({}); // Map of cargoId -> deckSlotId
   const [selectedCargoId, setSelectedCargoId] = useState(null);
   const [selectedSlotId, setSelectedSlotId] = useState(null);
@@ -99,12 +85,15 @@ const CargoArrangement = () => {
       }
       const data = await res.json();
       const voyagesArray = Array.isArray(data) ? dedupeVoyages(data) : [];
-      setVoyages(voyagesArray);
+      
       if (voyagesArray.length > 0) {
+        setVoyages(voyagesArray);
         setSelectedVoyageId(voyagesArray[0].id);
+      } else {
+        throw new Error('Backend returned empty voyages array');
       }
     } catch (err) {
-      console.log('Backend unavailable, using mock data:', err.message);
+      console.log('Backend unavailable or empty, using mock data:', err.message);
       const fallbackVoyages = dedupeVoyages(MOCK_VOYAGES);
       setVoyages(fallbackVoyages);
       if (fallbackVoyages.length > 0) {
@@ -122,6 +111,18 @@ const CargoArrangement = () => {
         throw new Error(errorData.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
+      
+      // Prevent backend empty array from wiping out our mock data
+      if (Array.isArray(data) && data.length === 0 && voyageId === 'voyage-1') {
+        console.log('Backend returned empty for voyage-1, using global mock cargo');
+        const layout = {};
+        cargo.forEach(c => {
+          layout[c.id] = c.deckSlotId || null;
+        });
+        setInitialLayout(layout);
+        return;
+      }
+      
       const cargoData = Array.isArray(data) ? data : [];
       setCargo(cargoData);
       
@@ -134,10 +135,10 @@ const CargoArrangement = () => {
       
       // NO AUTO-OPTIMIZE: Only runs on manual user click.
     } catch (err) {
-      console.log('Backend unavailable, using mock cargo data:', err.message);
-      const filteredCargo = MOCK_CARGO.filter(c => c.voyageId === voyageId);
-      const cargoData = filteredCargo.length > 0 ? filteredCargo : MOCK_CARGO;
-      setCargo(cargoData);
+      console.log('Backend unavailable, using global cargo data');
+      // No need to setCargo here because globalCargo is already populated from App.jsx
+      // Just map initial layout from the existing globalCargo
+      const cargoData = cargo.length > 0 ? cargo : [];
       
       // Store initial layout (mock)
       const layout = {};
@@ -291,7 +292,7 @@ const CargoArrangement = () => {
 
     setCargo(prev => prev.map(c => (
       c.id === cargoId
-        ? { ...c, deckSlotId: toSlotId, loadStatus: 'LOADED' }
+        ? { ...c, deckSlotId: toSlotId, loadStatus: 'LOADED', isPlanned: true }
         : c
     )));
     setProposedSlots(prev => clearProposalArtifacts(prev, cargoId, [fromSlotId, toSlotId].filter(Boolean)));
@@ -373,9 +374,13 @@ const CargoArrangement = () => {
   const handleAIOptimize = async (currentCargo = null) => {
     if (isOptimizing) return;
     setIsOptimizing(true);
-    const targetCargo = currentCargo || cargo;
+    const targetCargo = Array.isArray(currentCargo) ? currentCargo : cargo;
     
     try {
+      if (selectedVoyageId === 'voyage-1') {
+        throw new Error('Forcing local demo AI optimize for voyage-1');
+      }
+
       const res = await fetch(`${BACKEND_URL}/api/arrangement/ai-optimize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -430,32 +435,21 @@ const CargoArrangement = () => {
       // Demo mode: simulate AI optimization locally
       console.log('Backend unavailable, running demo AI optimization:', err.message);
       
-      const availableSlots = [
-        'B4-R4-C1', 'B4-R4-C2',
-        'B3-R4-C1', 'B3-R4-C2',
-        'B5-R4-C1', 'B5-R4-C2',
-        'B2-R4-C1', 'B2-R4-C2',
-        'B6-R4-C1', 'B6-R4-C2',
-        'B1-R4-C1', 'B1-R4-C2',
-      ];
       const unassignedCargo = targetCargo.filter(c => !c.deckSlotId && c.loadStatus === 'MANIFESTED');
+      const placedCargo = targetCargo.filter(c => c.deckSlotId);
       
-      const proposals = [];
+      const proposals = runAIOptimizer(unassignedCargo, placedCargo);
       const proposedMap = {};
       
-      unassignedCargo.forEach((c, index) => {
-        if (index < availableSlots.length) {
-          const slotId = availableSlots[index];
-          proposals.push({ cargoId: c.id, deckSlotId: slotId });
-          proposedMap[slotId] = c.id;
-        }
+      proposals.forEach((p) => {
+        proposedMap[p.deckSlotId] = p.cargoId;
       });
       
       setProposedSlots(proposedMap);
       
       // Incremental demo update
       for (const p of proposals) {
-        setCargo(prev => prev.map(c => c.id === p.cargoId ? { ...c, deckSlotId: p.deckSlotId, loadStatus: 'LOADED' } : c));
+        setCargo(prev => prev.map(c => c.id === p.cargoId ? { ...c, deckSlotId: p.deckSlotId, loadStatus: 'LOADED', isPlanned: true } : c));
         await new Promise(resolve => setTimeout(resolve, 30));
       }
       
@@ -602,6 +596,8 @@ const CargoArrangement = () => {
             backdropFilter: 'blur(4px)',
             overflow: 'hidden',
             minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
           }}>
             <CargoManifestPanel
               cargo={cargo}
@@ -751,7 +747,7 @@ const CargoArrangement = () => {
                 </div>
               )}
             </div>
-            <div style={{ flex: 1, overflow: 'auto' }}>
+            <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
               <CargoDetailPanel
                 cargo={selectedCargo}
                 pendingPlacement={pendingPlacement}

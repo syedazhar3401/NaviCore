@@ -6,11 +6,6 @@ const STATUS_LABELS = {
   DAMAGED: 'DAMAGED',
 }
 
-const MOCK_CARGO = [
-  { qrCode: 'QR-CA-001', contents: 'Electronics', weightKg: 12500, owner: 'TechCorp', loadStatus: 'LOADED', destinationPort: 'Port of Rotterdam' },
-  { qrCode: 'QR-CA-002', contents: 'Textiles', weightKg: 8000, owner: 'GlobalFabrics', loadStatus: 'SECURED', destinationPort: 'Port of Rotterdam' },
-  { qrCode: 'QR-CA-003', contents: 'Machinery', weightKg: 15000, owner: 'HeavyInd', loadStatus: 'MANIFESTED', destinationPort: 'Port of Rotterdam' },
-]
 
 const FUEL_CAPACITY = 1000
 const DEFAULT_DEST_COORDS = { lat: 51.92, lng: 4.48 }
@@ -41,9 +36,9 @@ export default function VoyageCard({
   totalRouteNm = 8510,
   isOutOfFuel = false,
   destCoords = DEFAULT_DEST_COORDS,
+  cargo = [],
 }) {
   const vessel = vessels[0]
-  const cargo = MOCK_CARGO
 
   const totalWeight = cargo.reduce((a, c) => a + c.weightKg, 0)
   const loadedCount = cargo.filter(c => ['LOADED', 'SECURED'].includes(c.loadStatus)).length
@@ -229,31 +224,43 @@ export default function VoyageCard({
       <div className="vo-manifest-section">
         <div className="vo-manifest-header-title">CARGO MANIFEST</div>
 
-        {cargo.map((c) => (
-          <div key={c.qrCode} className="vo-cargo-card">
-            <div className="vo-cargo-left">
-              <div className="vo-cargo-qr">{c.qrCode}</div>
-              <div className="vo-cargo-contents">{c.contents}</div>
-            </div>
-            <div className="vo-cargo-middle">
-              <div className="vo-cargo-stat">
-                <div className="vo-cargo-stat-label">Owner</div>
-                <div className="vo-cargo-stat-value">{c.owner}</div>
+        <div className="vo-cargo-list-wrapper" style={{
+          maxHeight: '320px',
+          overflowY: 'auto',
+          backgroundColor: 'rgba(255, 255, 255, 0.06)',
+          borderRadius: '16px',
+          padding: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          border: '1px solid rgba(255, 255, 255, 0.08)'
+        }}>
+          {cargo.map((c) => (
+            <div key={c.id || c.qrCode || c.cargoId} className="vo-cargo-card">
+              <div className="vo-cargo-left">
+                <div className="vo-cargo-qr">{c.cargoId || c.qrCode}</div>
+                <div className="vo-cargo-contents">{c.label || c.contents}</div>
               </div>
-              <div className="vo-cargo-stat">
-                <div className="vo-cargo-stat-label">Weight</div>
-                <div className="vo-cargo-stat-value">{c.weightKg.toLocaleString()} kg</div>
+              <div className="vo-cargo-middle">
+                <div className="vo-cargo-stat">
+                  <div className="vo-cargo-stat-label">Owner</div>
+                  <div className="vo-cargo-stat-value">{c.owner || 'Various'}</div>
+                </div>
+                <div className="vo-cargo-stat">
+                  <div className="vo-cargo-stat-label">Weight</div>
+                  <div className="vo-cargo-stat-value">{c.weightKg?.toLocaleString()} kg</div>
+                </div>
+                <div className="vo-cargo-stat">
+                  <div className="vo-cargo-stat-label">Destination</div>
+                  <div className="vo-cargo-stat-value">{(c.destinationPort || destination || '').replace('Port of ', '')}</div>
+                </div>
               </div>
-              <div className="vo-cargo-stat">
-                <div className="vo-cargo-stat-label">Destination</div>
-                <div className="vo-cargo-stat-value">{c.destinationPort.replace('Port of ', '')}</div>
+              <div className={`vo-cargo-status vo-cargo-status--${c.loadStatus?.toLowerCase() || 'manifested'}`}>
+                {STATUS_LABELS[c.loadStatus] || c.loadStatus}
               </div>
             </div>
-            <div className={`vo-cargo-status vo-cargo-status--${c.loadStatus.toLowerCase()}`}>
-              {STATUS_LABELS[c.loadStatus]}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   )

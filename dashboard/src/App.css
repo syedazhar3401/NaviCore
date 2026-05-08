@@ -4496,9 +4496,11 @@
 }
 
 .vo-cargo-middle {
-  display: flex;
-  gap: 40px;
+  display: grid;
+  grid-template-columns: 180px 120px 1fr;
+  gap: 20px;
   flex: 1;
+  align-items: center;
 }
 
 .vo-cargo-stat {

@@ -29,6 +29,15 @@ const CREW_ROSTER = [
   { id: 6, name: 'Lee Wei', role: 'Chief Mate', zone: 'Bridge', shiftStart: '06:00', dailyRate: 680, avatar: '🧑‍✈️' },
 ]
 
+const SHARED_MOCK_CARGO = [
+  { id: 'cargo-1', cargoId: 'CARGO-1001', voyageId: 'voyage-1', label: 'Electronics Container', weightKg: 2500, type: 'STANDARD', loadStatus: 'MANIFESTED', deckSlotId: null, contents: 'Consumer Electronics', owner: 'TechCorp Logistics', destinationPort: 'Rotterdam', isPlanned: true },
+  { id: 'cargo-2', cargoId: 'CARGO-1002', voyageId: 'voyage-1', label: 'Auto Parts', weightKg: 3200, type: 'STANDARD', loadStatus: 'LOADED', deckSlotId: 'B3-R2-C1', contents: 'Engine Components', owner: 'Global Auto Mfg', destinationPort: 'Rotterdam', isPlanned: false },
+  { id: 'cargo-3', cargoId: 'CARGO-1003', voyageId: 'voyage-1', label: 'Textile Goods', weightKg: 1800, type: 'STANDARD', loadStatus: 'MANIFESTED', deckSlotId: null, contents: 'Apparel & Fabrics', owner: 'Fashion Freight', destinationPort: 'Rotterdam', isPlanned: true },
+  { id: 'cargo-4', cargoId: 'CARGO-1004', voyageId: 'voyage-1', label: 'Machinery Parts', weightKg: 4500, type: 'STANDARD', loadStatus: 'LOADED', deckSlotId: 'B5-R3-C2', contents: 'Industrial Drilling Eq.', owner: 'HeavyInd Corp', destinationPort: 'Rotterdam', isPlanned: false },
+  { id: 'cargo-5', cargoId: 'CARGO-1005', voyageId: 'voyage-1', label: 'Chemical Drums', weightKg: 2100, type: 'HAZMAT', loadStatus: 'MANIFESTED', deckSlotId: null, contents: 'Industrial Solvents', owner: 'ChemLogix', destinationPort: 'Rotterdam', isPlanned: true },
+  { id: 'cargo-6', cargoId: 'CARGO-1006', voyageId: 'voyage-1', label: 'Food Products', weightKg: 1500, type: 'REFRIGERATED', loadStatus: 'LOADED', deckSlotId: 'B2-R1-C2', contents: 'Frozen Seafood', owner: 'Oceanic Foods', destinationPort: 'Rotterdam', isPlanned: false },
+];
+
 // Haversine — same formula as backend, returns NM
 function haversineNm(lat1, lon1, lat2, lon2) {
   const toRad = v => (v * Math.PI) / 180
@@ -251,6 +260,7 @@ export default function App() {
   const [distanceTraveled, setDistanceTraveled] = useState(0)
   const [voyageTicks, setVoyageTicks] = useState(0)
   const [reachablePortsCount, setReachablePortsCount] = useState(null)
+  const [globalCargo, setGlobalCargo] = useState(SHARED_MOCK_CARGO)
   const socketRef = useRef(null)
   const pollingRef = useRef(null)
   const fuelRef = useRef(fuelRemaining)
@@ -628,7 +638,7 @@ export default function App() {
 
   const views = {
     fleet: <FleetMap vessels={vesselsWithPosition} routeWaypoints={routeWaypoints} maritimeWaypoints={ROUTE_WAYPOINTS} bunkerDiversionPath={bunkerDiversionPath} isOutOfFuel={isOutOfFuel} isTightPortStatus={isTightPortStatus} bunkerStops={bunkerStops} />,
-    voyage: <VoyageCard vessels={vesselsWithPosition} fuelRemaining={fuelRemaining} fuelConsumptionRate={VOYAGE_CONFIG.fuelConsumptionRate} origin={VOYAGE_CONFIG.origin} destination={VOYAGE_CONFIG.destination} destCoords={VOYAGE_CONFIG.destCoords} isOutOfFuel={isOutOfFuel} bunkerStops={bunkerStops} routeDisplay={routeDisplay} remainingDistanceNm={remainingDistance} vesselRoutePos={vesselRoutePos} totalRouteNm={VOYAGE_CONFIG.totalRouteNm} onRemoveBunkerStop={removeBunkerStop} />,
+    voyage: <VoyageCard vessels={vesselsWithPosition} fuelRemaining={fuelRemaining} fuelConsumptionRate={VOYAGE_CONFIG.fuelConsumptionRate} origin={VOYAGE_CONFIG.origin} destination={VOYAGE_CONFIG.destination} destCoords={VOYAGE_CONFIG.destCoords} isOutOfFuel={isOutOfFuel} bunkerStops={bunkerStops} routeDisplay={routeDisplay} remainingDistanceNm={remainingDistance} vesselRoutePos={vesselRoutePos} totalRouteNm={VOYAGE_CONFIG.totalRouteNm} onRemoveBunkerStop={removeBunkerStop} cargo={globalCargo} />,
     fuel: <FuelOptimizer vessels={vesselsWithPosition} fuelRemaining={fuelRemaining} fuelConsumptionRate={VOYAGE_CONFIG.fuelConsumptionRate} isOutOfFuel={isOutOfFuel} isZeroPorts={isZeroReachablePorts} bunkerStops={bunkerStops} onAddBunkerStop={addBunkerStop} onRefuelAtStop={refuelAtStop} onRemoveBunkerStop={removeBunkerStop} onReachablePortsChange={handleReachablePortsChange} />,
     feed: <CargoFeed events={feedEvents} />,
     crew: <CrewRoster crew={CREW_ROSTER} />,
@@ -651,7 +661,7 @@ export default function App() {
       isOutOfFuel={isOutOfFuel}
     />,
     weather: <WeatherRisk vessels={vesselsWithPosition} fuelRemaining={fuelRemaining} destination={VOYAGE_CONFIG.destination} isOutOfFuel={isOutOfFuel} />,
-    arrangement: <CargoArrangement />,
+    arrangement: <CargoArrangement globalCargo={globalCargo} setGlobalCargo={setGlobalCargo} />,
   }
 
   const activePage = PAGE_META[activeView] || PAGE_META.fleet

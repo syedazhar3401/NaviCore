@@ -131,6 +131,7 @@ const CargoManifestPanel = ({
       <div style={{
         flex: 1,
         overflowY: 'auto',
+        minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
         gap: '8px',
@@ -139,7 +140,7 @@ const CargoManifestPanel = ({
         {cargo.map((item) => {
           const isSelected = selectedCargoId === item.id;
           const isPlaced = !!item.deckSlotId;
-          const isPlanning = isPlaced && initialLayout?.[item.id] !== item.deckSlotId;
+          const isPlanning = isPlaced && item.isPlanned;
 
           return (
             <CargoItem
@@ -229,9 +230,37 @@ const CargoItem = ({ cargo, isSelected, isPlanning, onClick }) => {
                 Planning
               </span>
             )}
+            {isPlaced && !isPlanning && (
+              <span style={{
+                fontSize: '8px',
+                backgroundColor: 'rgba(76, 175, 80, 0.2)',
+                color: '#4caf50',
+                padding: '1px 4px',
+                borderRadius: '4px',
+                border: '1px solid rgba(76, 175, 80, 0.3)',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+              }}>
+                Loaded
+              </span>
+            )}
+            {!isPlaced && (
+              <span style={{
+                fontSize: '8px',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                color: 'rgba(255, 255, 255, 0.5)',
+                padding: '1px 4px',
+                borderRadius: '4px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+              }}>
+                Manifested
+              </span>
+            )}
             <span style={{
               fontSize: '10px',
-              color: isPlaced ? '#00e676' : '#f0b429',
+              color: isPlanning ? '#f0b429' : (isPlaced ? '#4caf50' : 'rgba(255,255,255,0.3)'),
               fontWeight: 'bold',
             }}>
               {isPlaced ? '●' : '○'}

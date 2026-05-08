@@ -279,8 +279,8 @@ export function runAIOptimizer(unplacedCargo, placedCargo) {
       const hazmatBays = [5, 6, 7, 1]; // Priority: aft first
       for (const bay of hazmatBays) {
         if (reeferBays.includes(bay)) continue;
-        for (let row = 1; row <= 3; row++) {
-          for (let col = 1; col <= 3; col++) {
+        for (let row = 1; row <= 4; row++) {
+          for (let col = 1; col <= 2; col++) {
             const slot = `B${bay}-R${row}-C${col}`;
             if (availableSlots.includes(slot) && !usedSlots.has(slot)) {
               bestSlot = slot;
@@ -304,10 +304,10 @@ export function runAIOptimizer(unplacedCargo, placedCargo) {
           .reduce((s, c) => s + c.weightKg, 0);
 
         // Prefer lighter side
-        const cols = portWeight <= starboardWeight ? [1, 3, 2] : [3, 1, 2];
+        const cols = portWeight <= starboardWeight ? [1, 2] : [2, 1];
 
         for (const col of cols) {
-          for (let row = 1; row <= 3; row++) {
+          for (let row = 1; row <= 4; row++) {
             const slot = `B${bay}-R${row}-C${col}`;
             if (availableSlots.includes(slot) && !usedSlots.has(slot)) {
               bestSlot = slot;
@@ -323,6 +323,7 @@ export function runAIOptimizer(unplacedCargo, placedCargo) {
     if (bestSlot) {
       proposed.push({ cargoId: cargo.id, deckSlotId: bestSlot });
       usedSlots.add(bestSlot);
+      placedCargo.push({ ...cargo, deckSlotId: bestSlot });
     }
   }
 
