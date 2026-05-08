@@ -9,7 +9,7 @@ import { useWeatherLayers } from './WeatherLayer'
 import { useUserLocationLayers } from './UserLocationLayer'
 import LiveIntelligence from './LiveIntelligence'
 import AIInsightsPanel from './AIInsightsPanel'
-import { fetchAisSignals, getAisStatus, hasAisData } from '@/services/ais'
+import { fetchAisSignals, getAisStatus, hasAisData, pingAisApi } from '@/services/ais'
 import { fetchWeatherAlerts, getWeatherStatus, hasWeatherData } from '@/services/weather'
 import { fetchRadarTiles } from '@/services/weatherRadar'
 import { fetchNews } from '@/services/news-aggregator'
@@ -35,8 +35,8 @@ const GEOLOCATION_OPTIONS = {
 export default function FleetMap({ vessels, routeWaypoints, maritimeWaypoints, bunkerDiversionPath, isOutOfFuel, isTightPortStatus, bunkerStops }) {
   const [showRoutes, setShowRoutes] = useState(true)
   const [showPorts, setShowPorts] = useState(true)
-  const [showAisDensity, setShowAisDensity] = useState(false)
-  const [showAisDisruptions, setShowAisDisruptions] = useState(false)
+  const [showAisDensity, setShowAisDensity] = useState(true)
+  const [showAisDisruptions, setShowAisDisruptions] = useState(true)
   const [showWeather, setShowWeather] = useState(false)
   const [showIntelligence, setShowIntelligence] = useState(false)
   const [aisDensity, setAisDensity] = useState([])
@@ -363,13 +363,21 @@ export default function FleetMap({ vessels, routeWaypoints, maritimeWaypoints, b
     }
   }, [stopLocationWatch])
 
+  // Startup: always ping then load AIS data so state arrays are populated
   useEffect(() => {
-    if (showAisDensity || showAisDisruptions) {
-      if (!hasAisData()) {
-        loadAisData()
+    const initAis = async () => {
+      console.log('[FleetMap] Starting AIS connectivity ping...');
+      const pingResult = await pingAisApi();
+      if (pingResult.status === 'ok') {
+        console.log(`[FleetMap] AIS ping OK (${pingResult.latencyMs}ms) — ${pingResult.message}. Loading data...`);
+        await loadAisData();
+      } else {
+        console.error('[FleetMap] AIS API connectivity check failed:', pingResult.message);
       }
-    }
-  }, [showAisDensity, showAisDisruptions, loadAisData])
+    };
+    initAis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run once on mount — loadAisData is stable via useCallback
 
   useEffect(() => {
     if (showWeather) {
@@ -1155,10 +1163,11 @@ export default function FleetMap({ vessels, routeWaypoints, maritimeWaypoints, b
         }
 
         .neon-toggle-btn.active {
-          color: rgba(255, 255, 255, 1);
-          background: rgba(30, 60, 120, 0.4);
-          border-color: rgba(100, 200, 255, 0.6);
-          box-shadow: 0 4px 25px rgba(0, 150, 255, 0.15);
+          color: #00d4ff;
+          background: rgba(0, 180, 255, 0.18);
+          border-color: rgba(0, 212, 255, 0.9);
+          box-shadow: 0 0 16px rgba(0, 212, 255, 0.45), 0 4px 25px rgba(0, 150, 255, 0.25), inset 0 0 12px rgba(0, 212, 255, 0.08);
+          font-weight: 700;
         }
 
         .neon-glow-top {

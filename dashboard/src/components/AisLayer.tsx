@@ -23,11 +23,11 @@ export function useAisLayers({
       id: 'ais-density-layer',
       data: density,
       getPosition: d => [d.lon, d.lat],
-      getRadius: d => 4000 + d.intensity * 8000,
+      getRadius: d => 40000 + d.intensity * 80000,
       getFillColor: d => {
         const intensity = Math.min(Math.max(d.intensity, 0.15), 1);
         const isCongested = (d.deltaPct || 0) >= 15;
-        const alpha = Math.round(40 + intensity * 160);
+        const alpha = Math.round(60 + intensity * 160);
         
         // Orange for congested areas, cyan for normal traffic
         if (isCongested) {
@@ -35,8 +35,8 @@ export function useAisLayers({
         }
         return [0, 209, 255, alpha] as [number, number, number, number]; // #00d1ff
       },
-      radiusMinPixels: 4,
-      radiusMaxPixels: 12,
+      radiusMinPixels: 10,
+      radiusMaxPixels: 40,
       pickable: true,
     });
   }, [density, showDensity]);
@@ -49,7 +49,7 @@ export function useAisLayers({
       id: 'ais-disruptions-layer',
       data: disruptions,
       getPosition: d => [d.lon, d.lat],
-      getRadius: 12000,
+      getRadius: 60000,
       getFillColor: d => {
         // Color by severity
         if (d.severity === 'high') {
@@ -60,8 +60,8 @@ export function useAisLayers({
         }
         return [255, 200, 100, 180] as [number, number, number, number]; // Yellow
       },
-      radiusMinPixels: 6,
-      radiusMaxPixels: 14,
+      radiusMinPixels: 10,
+      radiusMaxPixels: 30,
       pickable: true,
       stroked: true,
       getLineColor: [255, 255, 255, 150] as [number, number, number, number],

@@ -80,6 +80,46 @@ export async function fetchAisSignals(): Promise<{
 }
 
 /**
+ * Ping the AIS API to check connectivity
+ */
+export async function pingAisApi(): Promise<{ status: 'ok' | 'error', latencyMs?: number, message?: string }> {
+  const start = performance.now();
+  console.log('[AIS] Pinging AIS API for disruption and traffic...');
+  
+  if (USE_MOCK_DATA) {
+    // Simulate network delay for mock ping
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const latency = Math.round(performance.now() - start);
+    console.log(`[AIS] Ping successful (mock). Latency: ${latency}ms`);
+    return { 
+      status: 'ok', 
+      latencyMs: latency,
+      message: 'Connected to mock AIS service'
+    };
+  }
+
+  if (!AISSTREAM_API_KEY) {
+    console.warn('[AIS] Ping failed: No API key configured');
+    return { status: 'error', message: 'No AIS API key configured' };
+  }
+
+  try {
+    // Basic connectivity check to the AISStream domain
+    await fetch('https://aisstream.io', { method: 'HEAD', mode: 'no-cors' });
+    const latency = Math.round(performance.now() - start);
+    console.log(`[AIS] Ping successful (AISStream). Latency: ${latency}ms`);
+    return { 
+      status: 'ok', 
+      latencyMs: latency,
+      message: 'Connected to AISStream API'
+    };
+  } catch (err) {
+    console.error('[AIS] Ping failed:', err);
+    return { status: 'error', message: String(err) };
+  }
+}
+
+/**
  * Check if AIS data has been fetched AND has actual content
  */
 export function hasAisData(): boolean {
