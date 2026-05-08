@@ -3,6 +3,7 @@ import { SLOT_MAP, CONTAINER_IMAGES, CONTAINER_SIZE } from '../data/slotMap.js';
 
 const ShipSlotGrid = ({ 
   cargo, 
+  initialLayout,
   slotColors, 
   selectedCargoId, 
   selectedSlotId,
@@ -58,6 +59,10 @@ const ShipSlotGrid = ({
           const slotInfo = SLOT_MAP[slotId];
           const occupyingCargo = slotCargoMap[slotId];
           const color = slotColors?.[slotId] || 'blue';
+          
+          // Planning logic: if it's placed now, but wasn't in this slot initially
+          const isPlanning = occupyingCargo && initialLayout?.[occupyingCargo.id] !== slotId;
+          
           const proposedCargoId = proposedSlots?.[slotId];
           const proposedCargoExists = proposedCargoId && cargo.some((c) => c.id === proposedCargoId);
           const isProposed = !!proposedCargoExists && !occupyingCargo;
@@ -73,6 +78,7 @@ const ShipSlotGrid = ({
               yPct={slotInfo.yPct}
               cargo={occupyingCargo}
               color={color}
+              isPlanning={isPlanning}
               isProposed={isProposed}
               isPendingTarget={isPendingTarget}
               isSelected={isSelected}
@@ -87,18 +93,40 @@ const ShipSlotGrid = ({
       {/* Legend */}
       <div style={{
         position: 'absolute',
-        bottom: '16px',
+        bottom: 'calc(32px + env(safe-area-inset-bottom, 0px))',
         left: '16px',
         display: 'flex',
-        gap: '12px',
+        flexDirection: 'column',
+        gap: '8px',
         backgroundColor: 'rgba(0,0,0,0.7)',
-        padding: '8px 12px',
+        padding: '10px 14px',
         borderRadius: '8px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        zIndex: 20,
       }}>
-        <LegendItem color="#2196f3" label="Balanced" />
-        <LegendItem color="#4caf50" label="Good" />
-        <LegendItem color="#ff9800" label="Caution" />
-        <LegendItem color="#f44336" label="Danger" />
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <LegendItem color="#2196f3" label="Balanced" />
+          <LegendItem color="#4caf50" label="Good" />
+          <LegendItem color="#ff9800" label="Caution" />
+          <LegendItem color="#f44336" label="Danger" />
+        </div>
+        <div style={{ 
+          borderTop: '1px solid rgba(255,255,255,0.1)', 
+          paddingTop: '6px',
+          marginTop: '2px',
+          display: 'flex', 
+          gap: '12px' 
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+             <div style={{ width: 10, height: 10, border: '1px solid rgba(255,255,255,0.4)', borderRadius: 2 }} />
+             <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}>Manifested</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+             <div style={{ width: 10, height: 10, border: '1px dashed #f0b429', borderRadius: 2, boxShadow: '0 0 5px #f0b429' }} />
+             <span style={{ fontSize: 9, color: '#f0b429', fontWeight: 'bold' }}>Planning</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -110,6 +138,7 @@ const Slot = ({
   yPct, 
   cargo, 
   color, 
+  isPlanning,
   isProposed,
   isPendingTarget,
   isSelected,
@@ -130,7 +159,13 @@ const Slot = ({
 
   if (isOccupied) {
     opacity = 1;
-    borderColor = 'transparent';
+    if (isPlanning) {
+      borderStyle = 'dashed';
+      borderColor = '#f0b429';
+      boxShadow = '0 0 10px rgba(240, 180, 41, 0.4)';
+    } else {
+      borderColor = 'rgba(255,255,255,0.1)';
+    }
   } else if (isPendingTarget) {
     opacity = 0.85;
     borderStyle = 'dashed';
@@ -170,8 +205,9 @@ const Slot = ({
         boxShadow,
         overflow: 'hidden',
         backgroundColor: isOccupied ? 'transparent' : 'rgba(255,255,255,0.05)',
+        zIndex: isSelected ? 15 : 10,
       }}
-      title={cargo ? `${cargo.cargoId}: ${cargo.label}` : `Empty slot ${slotId}`}
+      title={cargo ? `${cargo.cargoId}: ${cargo.label}${isPlanning ? ' (Planning)' : ''}` : `Empty slot ${slotId}`}
     >
       {isOccupied ? (
         <img

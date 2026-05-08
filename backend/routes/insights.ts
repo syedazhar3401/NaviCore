@@ -58,9 +58,12 @@ router.post('/insights/analyze', async (req, res) => {
 });
 
 router.get('/insights/health', (_req, res) => {
+  const groqKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+
   res.json({
     status: 'ok',
-    groqConfigured: Boolean(process.env.GROQ_API_KEY),
+    groqConfigured: Boolean(groqKey),
+    groqKeySource: process.env.GROQ_API_KEY ? 'GROQ_API_KEY' : process.env.VITE_GROQ_API_KEY ? 'VITE_GROQ_API_KEY' : null,
     openRouterConfigured: Boolean(process.env.OPENROUTER_API_KEY),
     cacheEntries: insightCache.size,
     timestamp: new Date().toISOString(),

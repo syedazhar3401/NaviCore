@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { NewsItem } from '@/types/news';
 import { DISPLAY_CATEGORIES, fetchNews, formatTimeAgo, getTagColor, getSourceColor } from '@/services/news-aggregator';
-import AIInsightsPanel from './AIInsightsPanel';
+
 
 interface LiveIntelligenceProps {
   isOpen: boolean;

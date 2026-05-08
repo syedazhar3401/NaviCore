@@ -1,14 +1,21 @@
 import type { ProgressCallback, SummarizationResult, SummarizeOptions } from './types.js';
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
+function getGroqApiKey(): string {
+  return process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY || '';
+}
+
+function getOpenRouterApiKey(): string {
+  return process.env.OPENROUTER_API_KEY || '';
+}
+
+
 const GROQ_MODELS = {
-  fast: 'llama3-8b-8192',
-  balanced: 'llama3-70b-8192',
-  powerful: 'mixtral-8x7b-32768',
+  fast: 'llama-3.1-8b-instant',
+  balanced: 'llama-3.3-70b-versatile',
+  powerful: 'openai/gpt-oss-120b',
 };
 
 const summaryCache = new Map<string, { result: SummarizationResult; expires: number }>();
@@ -30,18 +37,20 @@ export async function generateSummary(
   const cached = getCachedSummary(cacheKey);
   if (cached) return cached;
 
-  if (!options?.skipCloudProviders && GROQ_API_KEY) {
+  const groqApiKey = getGroqApiKey();
+  if (!options?.skipCloudProviders && groqApiKey) {
     onProgress?.(1, 3, 'Connecting to Groq AI...');
-    const groqResult = await tryGroq(usableHeadlines, geoContext, lang, options?.bodies);
+    const groqResult = await tryGroq(usableHeadlines, groqApiKey, geoContext, lang, options?.bodies);
     if (groqResult) {
       setCachedSummary(cacheKey, groqResult);
       return groqResult;
     }
   }
 
-  if (!options?.skipCloudProviders && OPENROUTER_API_KEY) {
+  const openRouterApiKey = getOpenRouterApiKey();
+  if (!options?.skipCloudProviders && openRouterApiKey) {
     onProgress?.(2, 3, 'Trying OpenRouter...');
-    const openRouterResult = await tryOpenRouter(usableHeadlines, geoContext, lang, options?.bodies);
+    const openRouterResult = await tryOpenRouter(usableHeadlines, openRouterApiKey, geoContext, lang, options?.bodies);
     if (openRouterResult) {
       setCachedSummary(cacheKey, openRouterResult);
       return openRouterResult;
@@ -54,13 +63,13 @@ export async function generateSummary(
   return fallback;
 }
 
-async function tryGroq(headlines: string[], geoContext?: string, lang?: string, bodies?: string[]): Promise<SummarizationResult | null> {
+async function tryGroq(headlines: string[], groqApiKey: string, geoContext?: string, lang?: string, bodies?: string[]): Promise<SummarizationResult | null> {
   try {
     const prompt = buildPrompt(headlines, geoContext, lang, bodies);
     const response = await fetch(GROQ_API_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${GROQ_API_KEY}`,
+        Authorization: `Bearer ${groqApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -89,13 +98,13 @@ async function tryGroq(headlines: string[], geoContext?: string, lang?: string, 
   }
 }
 
-async function tryOpenRouter(headlines: string[], geoContext?: string, lang?: string, bodies?: string[]): Promise<SummarizationResult | null> {
+async function tryOpenRouter(headlines: string[], openRouterApiKey: string, geoContext?: string, lang?: string, bodies?: string[]): Promise<SummarizationResult | null> {
   try {
     const prompt = buildPrompt(headlines, geoContext, lang, bodies);
     const response = await fetch(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${openRouterApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -123,10 +132,17 @@ async function tryOpenRouter(headlines: string[], geoContext?: string, lang?: st
 
 function deterministicSummary(headlines: string[], geoContext?: string): SummarizationResult {
   const top = headlines.slice(0, 3);
-  const focalLine = geoContext ? ' Current focal-point synthesis indicates correlated geopolitical attention that should be monitored for operational impact.' : '';
+
   const summary = top.length > 0
-    ? `Top live intelligence themes: ${top.map((h, i) => `${i + 1}) ${h}`).join(' ')}.${focalLine}`
-    : 'No sufficient live headlines are available for AI summarization right now.';
+    ? [
+        `Primary live development: ${top[0]}.`,
+        top[1] ? `Secondary watch item: ${top[1]}.` : null,
+        top[2] ? `Additional signal: ${top[2]}.` : null,
+        geoContext
+          ? 'Operational note: focal-point synthesis indicates correlated regional pressure that should be monitored closely.'
+          : 'Operational note: maintain standard routing caution and continue monitoring live advisories.',
+      ].filter(Boolean).join(' ')
+    : 'No high-confidence live headlines are available right now; maintain standard operating watch and refresh the feed shortly.';
 
   return { summary, provider: 'deterministic', model: 'rules-fallback', cached: false };
 }

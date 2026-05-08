@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { Map, Source, Layer } from 'react-map-gl/maplibre'
 import { DeckGL } from 'deck.gl'
+import { ScatterplotLayer, TextLayer, LineLayer, IconLayer } from 'deck.gl'
 import { useTradeRoutesLayers } from './TradeRoutesLayer'
 import { useAisLayers } from './AisLayer'
 import { usePortsLayers } from './PortsLayer'
@@ -12,6 +13,7 @@ import { fetchAisSignals, getAisStatus, hasAisData } from '@/services/ais'
 import { fetchWeatherAlerts, getWeatherStatus, hasWeatherData } from '@/services/weather'
 import { fetchRadarTiles } from '@/services/weatherRadar'
 import { fetchNews } from '@/services/news-aggregator'
+import { generateRoutePolyline } from '@/utils/route-interpolation'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
@@ -30,12 +32,12 @@ const GEOLOCATION_OPTIONS = {
   maximumAge: 5000,
 }
 
-export default function FleetMap() {
+export default function FleetMap({ vessels, routeWaypoints, maritimeWaypoints, bunkerDiversionPath, isOutOfFuel, isTightPortStatus, bunkerStops }) {
   const [showRoutes, setShowRoutes] = useState(true)
   const [showPorts, setShowPorts] = useState(true)
-  const [showAisDensity, setShowAisDensity] = useState(false) // Default off - manual fetch only
-  const [showAisDisruptions, setShowAisDisruptions] = useState(false) // Default off - manual fetch only
-  const [showWeather, setShowWeather] = useState(false) // Default off - manual fetch only
+  const [showAisDensity, setShowAisDensity] = useState(false)
+  const [showAisDisruptions, setShowAisDisruptions] = useState(false)
+  const [showWeather, setShowWeather] = useState(false)
   const [showIntelligence, setShowIntelligence] = useState(false)
   const [aisDensity, setAisDensity] = useState([])
   const [aisDisruptions, setAisDisruptions] = useState([])
@@ -54,7 +56,189 @@ export default function FleetMap() {
   const locationWatchRef = useRef(null)
   const followLocationRef = useRef(false)
 
-  // Manual fetch function for AIS - only called when user toggles on
+  // --- Voyage route line (yellow — original Singapore → Rotterdam path) ---
+  const voyageRouteGeoJson = useMemo(() => {
+    if (!maritimeWaypoints || maritimeWaypoints.length < 2) return null
+    const allCoords = generateRoutePolyline(maritimeWaypoints, 10)
+    return {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: allCoords,
+      },
+    }
+  }, [maritimeWaypoints])
+
+  // --- Bunker diversion line (red — vessel → bunker port) ---
+  const bunkerDiversionGeoJson = useMemo(() => {
+    if (!bunkerDiversionPath || bunkerDiversionPath.length < 2) return null
+    const coords = generateRoutePolyline(bunkerDiversionPath, 5)
+    return {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: coords,
+      },
+    }
+  }, [bunkerDiversionPath])
+
+  // --- Voyage waypoint markers (DeckGL layers) ---
+  const voyageMarkerLayers = useMemo(() => {
+    if (!routeWaypoints) return []
+    const markers = routeWaypoints.map(wp => ({
+      position: [wp.lng, wp.lat],
+      name: wp.name,
+      type: wp.type,
+    }))
+
+    return [
+      new ScatterplotLayer({
+        id: 'voyage-waypoint-markers',
+        data: markers,
+        getPosition: d => d.position,
+        getRadius: d => d.type === 'origin' || d.type === 'destination' ? 25000 : 18000,
+        getFillColor: d => {
+          if (d.type === 'origin') return [0, 230, 118, 200]
+          if (d.type === 'destination') return [255, 61, 61, 200]
+          if (d.type === 'completed_bunker') return [0, 212, 255, 180]
+          return [255, 193, 7, 220] // bunker stop - amber
+        },
+        getLineColor: [255, 255, 255, 150],
+        lineWidthMinPixels: 2,
+        stroked: true,
+        pickable: true,
+      }),
+      new TextLayer({
+        id: 'voyage-waypoint-labels',
+        data: markers,
+        getPosition: d => d.position,
+        getText: d => {
+          if (d.type === 'origin') return '📍 ' + d.name
+          if (d.type === 'destination') return '🏁 ' + d.name
+          if (d.type === 'completed_bunker') return '⛽ ' + d.name + ' ✓'
+          return '⛽ ' + d.name
+        },
+        getSize: 12,
+        getColor: [255, 255, 255, 230],
+        backgroundColor: [10, 22, 40, 200],
+        backgroundPadding: [6, 4],
+        borderColor: [0, 212, 255, 150],
+        borderWidth: 1,
+        fontFamily: 'Inter, sans-serif',
+        fontWeight: 600,
+        anchorY: 'bottom',
+        pixelOffset: [0, -16],
+        pickable: true,
+      }),
+    ]
+  }, [routeWaypoints])
+
+  // --- Maritime chokepoint markers (named waypoints along the sea lane) ---
+  const chokepointLayers = useMemo(() => {
+    if (!maritimeWaypoints) return []
+    const named = maritimeWaypoints
+      .filter(wp => wp.name && wp.type === 'chokepoint')
+      .map(wp => ({ position: [wp.lng, wp.lat], name: wp.name }))
+
+    if (named.length === 0) return []
+
+    return [
+      new ScatterplotLayer({
+        id: 'chokepoint-markers',
+        data: named,
+        getPosition: d => d.position,
+        getRadius: 12000,
+        getFillColor: [255, 61, 61, 120],
+        getLineColor: [255, 200, 200, 100],
+        lineWidthMinPixels: 1,
+        stroked: true,
+        pickable: true,
+      }),
+      new TextLayer({
+        id: 'chokepoint-labels',
+        data: named,
+        getPosition: d => d.position,
+        getText: d => d.name,
+        getSize: 10,
+        getColor: [255, 180, 180, 200],
+        backgroundColor: [40, 10, 10, 160],
+        backgroundPadding: [4, 3],
+        borderColor: [255, 61, 61, 80],
+        borderWidth: 1,
+        fontFamily: 'Inter, sans-serif',
+        fontWeight: 500,
+        anchorY: 'bottom',
+        pixelOffset: [0, -10],
+        pickable: true,
+      }),
+    ]
+  }, [maritimeWaypoints])
+
+  // --- Vessel ship marker (ship icon at current position, oriented toward destination) ---
+  const vesselMarkerLayers = useMemo(() => {
+    const vessel = vessels?.[0]
+    if (!vessel) return []
+
+    // Dynamic sizing based on zoom
+    const zoom = viewState.zoom || 3
+    const baseScale = Math.pow(1.15, zoom - 3)
+    const dynamicSize = Math.max(40, 100 * baseScale)
+    const dynamicTextSize = Math.max(8, 11 * baseScale)
+    const dynamicOffset = Math.max(22, 56 * baseScale)
+
+    // Compute bearing: direction from vessel to destination (Rotterdam)
+    const toRad = v => (v * Math.PI) / 180
+    const toDeg = v => (v * 180) / Math.PI
+    const lat1 = toRad(vessel.currentLat)
+    const lat2 = toRad(51.92)
+    const dLon = toRad(4.48 - vessel.currentLng)
+    const y = Math.sin(dLon) * Math.cos(lat2)
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon)
+    const bearing = (toDeg(Math.atan2(y, x)) + 360) % 360
+
+    const iconData = [{
+      position: [vessel.currentLng, vessel.currentLat],
+      angle: bearing,
+    }]
+
+    return [
+      new IconLayer({
+        id: 'vessel-ship-icon',
+        data: iconData,
+        getPosition: d => d.position,
+        getAngle: d => d.angle,
+        getIcon: () => ({
+          url: new URL('@/assets/ship-removebg-preview.png', import.meta.url).href,
+          width: 256,
+          height: 256,
+          anchorY: 128,
+          anchorX: 128,
+          mask: false,
+        }),
+        getSize: dynamicSize,
+        sizeScale: 1,
+        pickable: true,
+      }),
+      new TextLayer({
+        id: 'vessel-name-label',
+        data: [{ position: [vessel.currentLng, vessel.currentLat] }],
+        getPosition: d => d.position,
+        getText: () => vessel.name + (isOutOfFuel ? ' (STRANDED)' : ''),
+        getSize: dynamicTextSize,
+        getColor: isOutOfFuel ? [255, 61, 61, 240] : [0, 212, 255, 240],
+        backgroundColor: [10, 22, 40, 250],
+        backgroundPadding: [dynamicTextSize * 0.55, dynamicTextSize * 0.3],
+        borderColor: isOutOfFuel ? [255, 61, 61, 150] : [0, 212, 255, 150],
+        borderWidth: 2,
+        fontFamily: 'Space Grotesk, sans-serif',
+        fontWeight: 700,
+        anchorY: 'top',
+        pixelOffset: [0, dynamicOffset],
+      }),
+    ]
+  }, [vessels, isOutOfFuel, viewState.zoom])
+
+  // Manual fetch function for AIS
   const loadAisData = useCallback(async () => {
     const { disruptions, density } = await fetchAisSignals()
     setAisDisruptions(disruptions)
@@ -62,7 +246,7 @@ export default function FleetMap() {
     setAisStatus(getAisStatus())
   }, [])
 
-  // Manual fetch function for Weather - only called when user toggles on
+  // Manual fetch function for Weather
   const loadWeatherData = useCallback(async () => {
     const alerts = await fetchWeatherAlerts()
     setWeatherAlerts(alerts)
@@ -179,7 +363,6 @@ export default function FleetMap() {
     }
   }, [stopLocationWatch])
 
-  // Handle AIS toggle - fetch only when turning on and data hasn't been fetched yet
   useEffect(() => {
     if (showAisDensity || showAisDisruptions) {
       if (!hasAisData()) {
@@ -188,21 +371,17 @@ export default function FleetMap() {
     }
   }, [showAisDensity, showAisDisruptions, loadAisData])
 
-  // Handle Weather toggle - fetch alerts and radar when turning on
   useEffect(() => {
     if (showWeather) {
-      // Fetch alerts if not already loaded
       if (!hasWeatherData()) {
         loadWeatherData()
       }
-      // Fetch radar tiles
       fetchRadarTiles().then(url => {
         if (url) setRadarTileUrl(url)
       })
     }
   }, [showWeather, loadWeatherData])
 
-  // Periodic status update (every 30 seconds instead of 10)
   useEffect(() => {
     const interval = setInterval(() => {
       setAisStatus(getAisStatus())
@@ -210,7 +389,6 @@ export default function FleetMap() {
     return () => clearInterval(interval)
   }, [])
 
-  // Load news when AI panel opens
   useEffect(() => {
     if (showAiInsights && aiNewsItems.length === 0 && !aiNewsLoading) {
       loadAiNews()
@@ -235,7 +413,6 @@ export default function FleetMap() {
     showLabels: showPorts,
   })
 
-  // Debug logging
   useEffect(() => {
     if (weatherAlerts.length > 0) {
       console.log('[FleetMap] Weather alerts loaded:', weatherAlerts.length)
@@ -245,7 +422,7 @@ export default function FleetMap() {
   const weatherLayers = useWeatherLayers({
     alerts: weatherAlerts,
     showCentroids: showWeather,
-    showPolygons: false, // Disable polygons for now, just show centroids
+    showPolygons: false,
   })
 
   const userLocationLayers = useUserLocationLayers({
@@ -253,84 +430,64 @@ export default function FleetMap() {
     visible: showMyLocation && !!currentLocation,
   })
 
-  const allLayers = [...tradeRouteLayers, ...aisLayers, ...portsLayers, ...weatherLayers, ...userLocationLayers]
+  const allLayers = [
+    ...tradeRouteLayers,
+    ...aisLayers,
+    ...portsLayers,
+    ...weatherLayers,
+    ...userLocationLayers,
+    ...chokepointLayers,
+    ...voyageMarkerLayers,
+    ...vesselMarkerLayers,
+  ]
+
+  const reachedBunkerStops = bunkerStops?.filter(bs => bs.reached && !bs.refueled) || []
+  const hasReachedBunkerStop = reachedBunkerStops.length > 0
 
   const getTooltip = useCallback(({ object }) => {
     if (!object) return null
 
     if (object.isUserLocation) {
       return {
-        text: `Your Location
-Accuracy: ${Math.round(object.accuracy || 0)}m`,
+        text: `Your Location\nAccuracy: ${Math.round(object.accuracy || 0)}m`,
       }
     }
 
     if (object.routeId) {
-      // Trade route segment
       return {
-        text: `${object.routeName}
-Category: ${object.category}
-Status: ${object.status}
-Volume: ${object.volumeDesc}`,
+        text: `${object.routeName}\nCategory: ${object.category}\nStatus: ${object.status}\nVolume: ${object.volumeDesc}`,
       }
     }
 
     if (object.name && object.waterwayId) {
-      // Chokepoint
       return {
-        text: `${object.name}
-${object.description}`,
+        text: `${object.name}\n${object.description}`,
       }
     }
 
-    // AIS Density Zone
     if (object.shipsPerDay !== undefined) {
       return {
-        text: `${object.name}
-Intensity: ${(object.intensity * 100).toFixed(0)}%
-Ships/day: ${object.shipsPerDay || 'N/A'}
-Change: ${object.deltaPct > 0 ? '+' : ''}${object.deltaPct}%
-${object.note || ''}`,
+        text: `${object.name}\nIntensity: ${(object.intensity * 100).toFixed(0)}%\nShips/day: ${object.shipsPerDay || 'N/A'}\nChange: ${object.deltaPct > 0 ? '+' : ''}${object.deltaPct}%\n${object.note || ''}`,
       }
     }
 
-    // AIS Disruption Event
     if (object.darkShips !== undefined) {
       return {
-        text: `${object.name}
-Type: ${object.type}
-Severity: ${object.severity}
-Dark ships: ${object.darkShips || 'N/A'}
-Vessels: ${object.vesselCount || 'N/A'}
-Change: +${object.changePct}%
-
-${object.description}`,
+        text: `${object.name}\nType: ${object.type}\nSeverity: ${object.severity}\nDark ships: ${object.darkShips || 'N/A'}\nVessels: ${object.vesselCount || 'N/A'}\nChange: +${object.changePct}%\n\n${object.description}`,
       }
     }
 
-    // Port
     if (object.country !== undefined) {
       return {
-        text: `${object.name}
-Country: ${object.country}
-Type: ${object.type}
-${object.rank ? `Rank: #${object.rank} globally` : ''}
-${object.note || ''}`,
+        text: `${object.name}\nCountry: ${object.country}\nType: ${object.type}\n${object.rank ? `Rank: #${object.rank} globally` : ''}\n${object.note || ''}`,
       }
     }
 
-    // Weather Alert
     if (object.event !== undefined) {
       const expiresText = object.expires ?
         `Expires: ${new Date(object.expires).toLocaleString()}` : '';
       return {
-        text: `${object.event}
-Severity: ${object.severity}
-${object.headline}
-Area: ${object.areaDesc}
-${expiresText}
-
-${object.description ? object.description.substring(0, 150) + (object.description.length > 150 ? '...' : '') : ''}`,
+        text: `${object.event}\nSeverity: ${object.severity}\n${object.headline}\nArea: ${object.areaDesc}\n${expiresText}\n\n${object.description ? object.description.substring(0, 150) + (object.description.length > 150 ? '...' : '') : ''}`,
       }
     }
 
@@ -344,7 +501,6 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
       }
     }
 
-    // Cool blue-dark palette
     setPaintIfLayerExists('background', 'background-color', '#0a1628')
 
       ;['water', 'water_intermittent'].forEach((layerId) => {
@@ -366,7 +522,6 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
 
   return (
     <div className="fleet-map-fullscreen">
-      {/* Full-screen map container */}
       <DeckGL
         viewState={viewState}
         onViewStateChange={({ viewState: nextViewState, interactionState }) => {
@@ -390,7 +545,77 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           attributionControl={false}
           onLoad={(event) => applyMapPalette(event.target)}
         >
-          {/* Weather Radar Layer - RainViewer tiles */}
+          {/* Voyage Route Line — yellow original Singapore → Rotterdam path */}
+          {voyageRouteGeoJson && (
+            <Source id="voyage-route" type="geojson" data={voyageRouteGeoJson}>
+              <Layer
+                id="voyage-route-line"
+                type="line"
+                paint={{
+                  'line-color': '#FFC107',
+                  'line-width': 3,
+                  'line-opacity': 0.85,
+                  'line-dasharray': [2, 1],
+                }}
+                layout={{
+                  'line-join': 'round',
+                  'line-cap': 'round',
+                }}
+              />
+              {/* Glow under the line */}
+              <Layer
+                id="voyage-route-glow"
+                type="line"
+                paint={{
+                  'line-color': '#FFC107',
+                  'line-width': 8,
+                  'line-opacity': 0.2,
+                  'line-blur': 6,
+                }}
+                layout={{
+                  'line-join': 'round',
+                  'line-cap': 'round',
+                }}
+              />
+            </Source>
+          )}
+
+          {/* Bunker Diversion Line — red vessel → bunker port path */}
+          {bunkerDiversionGeoJson && (
+            <Source id="bunker-diversion" type="geojson" data={bunkerDiversionGeoJson}>
+              <Layer
+                id="bunker-diversion-line"
+                type="line"
+                paint={{
+                  'line-color': '#ff3d3d',
+                  'line-width': 3,
+                  'line-opacity': 0.9,
+                  'line-dasharray': [3, 2],
+                }}
+                layout={{
+                  'line-join': 'round',
+                  'line-cap': 'round',
+                }}
+              />
+              {/* Glow under the diversion line */}
+              <Layer
+                id="bunker-diversion-glow"
+                type="line"
+                paint={{
+                  'line-color': '#ff3d3d',
+                  'line-width': 8,
+                  'line-opacity': 0.25,
+                  'line-blur': 6,
+                }}
+                layout={{
+                  'line-join': 'round',
+                  'line-cap': 'round',
+                }}
+              />
+            </Source>
+          )}
+
+          {/* Weather Radar Layer */}
           {showWeather && radarTileUrl && (
             <Source
               id="weather-radar"
@@ -421,12 +646,125 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
         <span className="map-badge map-badge-cyan">
           21 Routes
         </span>
+        {isTightPortStatus && !isOutOfFuel && (
+          <span className="map-badge" style={{
+            background: 'rgba(255,193,7,0.2)',
+            border: '1px solid rgba(255,193,7,0.5)',
+            color: '#FFC107',
+          }}>
+            <span className="map-badge-dot"></span>
+            TIGHT PORT STATUS
+          </span>
+        )}
+        {isOutOfFuel && (
+          <span className="map-badge" style={{
+            background: 'rgba(255,61,61,0.2)',
+            border: '1px solid rgba(255,61,61,0.5)',
+            color: '#ff3d3d',
+          }}>
+            <span className="map-badge-dot"></span>
+            EMERGENCY
+          </span>
+        )}
       </div>
+
+      {/* Fuel/Stranded alert overlay on map */}
+      {isOutOfFuel && (
+        <div style={{
+          position: 'absolute',
+          top: 80,
+          right: 24,
+          zIndex: 15,
+          maxWidth: 320,
+          padding: '14px 18px',
+          borderRadius: 10,
+          background: 'rgba(255,61,61,0.12)',
+          border: '1px solid rgba(255,61,61,0.4)',
+          backdropFilter: 'blur(12px)',
+          color: '#ff6b6b',
+          fontSize: 12,
+          fontWeight: 600,
+          lineHeight: 1.5,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>VESSEL STRANDED</div>
+          <div style={{ color: 'rgba(255,255,255,0.7)' }}>Fuel depleted — vessel adrift. Go to Fuel Stop Optimizer for emergency assistance.</div>
+        </div>
+      )}
+
+      {/* Tight reachable-port warning on FleetMap */}
+      {isTightPortStatus && !isOutOfFuel && (
+        <div style={{
+          position: 'absolute',
+          top: hasReachedBunkerStop ? 200 : 80,
+          right: 24,
+          zIndex: 15,
+          maxWidth: 320,
+          padding: '14px 18px',
+          borderRadius: 10,
+          background: 'rgba(255,193,7,0.12)',
+          border: '1px solid rgba(255,193,7,0.4)',
+          backdropFilter: 'blur(12px)',
+          color: '#FFC107',
+          fontSize: 12,
+          fontWeight: 600,
+          lineHeight: 1.5,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>LIMITED PORT OPTIONS</div>
+          <div style={{ color: 'rgba(255,255,255,0.7)' }}>
+            Select a bunker stop now in Fuel Stop Optimizer before options run out.
+          </div>
+        </div>
+      )}
+
+      {/* Bunker stop reached alert on map */}
+      {hasReachedBunkerStop && !isOutOfFuel && (
+        <div style={{
+          position: 'absolute',
+          top: 80,
+          right: 24,
+          zIndex: 15,
+          maxWidth: 320,
+          padding: '14px 18px',
+          borderRadius: 10,
+          background: 'rgba(255,61,61,0.12)',
+          border: '1px solid rgba(255,61,61,0.4)',
+          backdropFilter: 'blur(12px)',
+          color: '#ff6b6b',
+          fontSize: 12,
+          fontWeight: 600,
+          lineHeight: 1.5,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>BUNKER STOP REACHED</div>
+          <div style={{ color: 'rgba(255,255,255,0.7)' }}>
+            {reachedBunkerStops.map(bs => bs.name).join(', ')} — Refuel now in Fuel Stop Optimizer to continue voyage.
+          </div>
+        </div>
+      )}
 
       {/* Floating legend - bottom left */}
       <div className="map-overlay-legend">
         <span className="legend-label">LEGEND</span>
         <div className="legend-items-row">
+          <div className="legend-item">
+            <span className="legend-dot" style={{ background: '#00e676' }}></span>
+            <span>Origin</span>
+          </div>
+          <div className="legend-item">
+            <span className="legend-dot" style={{ background: '#ff3d3d' }}></span>
+            <span>Destination</span>
+          </div>
+          <div className="legend-item">
+            <span className="legend-dot" style={{ background: '#FFC107' }}></span>
+            <span>Bunker Stop</span>
+          </div>
+          <div className="legend-item">
+            <span className="legend-line" style={{ background: '#FFC107', height: '2px' }}></span>
+            <span>Planned Route</span>
+          </div>
+          <div className="legend-item">
+            <span className="legend-line" style={{ background: '#ff3d3d', height: '2px' }}></span>
+            <span>Bunker Diversion</span>
+          </div>
           <div className="legend-item">
             <span className="legend-dot" style={{ background: '#00d1ff' }}></span>
             <span>Container Port</span>
@@ -435,28 +773,6 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
             <span className="legend-dot" style={{ background: '#ff6432' }}></span>
             <span>Oil Terminal</span>
           </div>
-          <div className="legend-item">
-            <span className="legend-dot" style={{ background: '#64ff96' }}></span>
-            <span>LNG Terminal</span>
-          </div>
-          <div className="legend-item">
-            <span className="legend-dot" style={{ background: '#c896ff' }}></span>
-            <span>Mixed Port</span>
-          </div>
-          <div className="legend-item">
-            <span className="legend-line" style={{ background: '#64c8ff', height: '2px' }}></span>
-            <span>Trade Route</span>
-          </div>
-          <div className="legend-item">
-            <span className="legend-dot" style={{ background: '#ff0000' }}></span>
-            <span>Weather Alert</span>
-          </div>
-          {showMyLocation && currentLocation && (
-            <div className="legend-item">
-              <span className="legend-location">⛴</span>
-              <span>My Location</span>
-            </div>
-          )}
           {showWeather && (
             <div className="legend-item">
               <span className="legend-radar"></span>
@@ -492,7 +808,6 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           className={`neon-toggle-btn ${showAisDensity ? 'active' : ''}`}
           onClick={async (e) => {
             if (showAisDensity && e.shiftKey) {
-              // Shift+Click to refresh data
               await loadAisData()
             } else {
               setShowAisDensity(v => !v)
@@ -509,7 +824,6 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           className={`neon-toggle-btn ${showAisDisruptions ? 'active' : ''}`}
           onClick={async (e) => {
             if (showAisDisruptions && e.shiftKey) {
-              // Shift+Click to refresh data
               await loadAisData()
             } else {
               setShowAisDisruptions(v => !v)
@@ -526,7 +840,6 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           className={`neon-toggle-btn ${showWeather ? 'active' : ''}`}
           onClick={async (e) => {
             if (showWeather && e.shiftKey) {
-              // Shift+Click to refresh data
               await loadWeatherData()
             } else {
               setShowWeather(v => !v)
@@ -622,8 +935,7 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           bottom: 0;
           z-index: 1;
         }
-        
-        /* Floating Header */
+
         .map-overlay-header {
           position: absolute;
           top: 86px;
@@ -631,7 +943,7 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           z-index: 10;
           pointer-events: none;
         }
-        
+
         .map-title {
           margin: 0;
           font-family: 'Space Grotesk', sans-serif;
@@ -641,15 +953,14 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           text-shadow: 0 2px 8px rgba(0,0,0,0.8);
           letter-spacing: -0.3px;
         }
-        
+
         .map-subtitle {
           margin: 4px 0 0 0;
           font-size: 13px;
           color: rgba(255,255,255,0.7);
           text-shadow: 0 1px 4px rgba(0,0,0,0.8);
         }
-        
-        /* Floating Badges */
+
         .map-overlay-badges {
           position: absolute;
           top: 24px;
@@ -658,7 +969,7 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           display: flex;
           gap: 10px;
         }
-        
+
         .map-badge {
           display: flex;
           align-items: center;
@@ -670,19 +981,19 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           backdrop-filter: blur(10px);
           border: 1px solid;
         }
-        
+
         .map-badge-green {
           background: rgba(0, 230, 118, 0.15);
           border-color: rgba(0, 230, 118, 0.4);
           color: #00e676;
         }
-        
+
         .map-badge-cyan {
           background: rgba(0, 212, 255, 0.15);
           border-color: rgba(0, 212, 255, 0.4);
           color: #00d4ff;
         }
-        
+
         .map-badge-dot {
           width: 6px;
           height: 6px;
@@ -690,13 +1001,12 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           border-radius: 50%;
           animation: pulse-dot 1.5s ease-in-out infinite;
         }
-        
+
         @keyframes pulse-dot {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }
-        
-        /* Floating Legend */
+
         .map-overlay-legend {
           position: absolute;
           bottom: 24px;
@@ -712,19 +1022,19 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           backdrop-filter: blur(12px);
           box-shadow: 0 4px 24px rgba(0,0,0,0.4);
         }
-        
+
         .legend-label {
           font-size: 10px;
           font-weight: 700;
           letter-spacing: 1.5px;
           color: rgba(255,255,255,0.5);
         }
-        
+
         .legend-items-row {
           display: flex;
           gap: 20px;
         }
-        
+
         .legend-item {
           display: flex;
           align-items: center;
@@ -733,13 +1043,13 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           font-weight: 500;
           color: rgba(255,255,255,0.9);
         }
-        
+
         .legend-line {
           width: 20px;
           border-radius: 2px;
           background: #64c8ff;
         }
-        
+
         .legend-dot {
           width: 10px;
           height: 10px;
@@ -817,8 +1127,7 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           align-items: flex-start;
           gap: 10px;
         }
-        
-        /* Neon Toggle Button */
+
         .neon-toggle-btn {
           display: inline-flex;
           align-items: center;
@@ -838,20 +1147,20 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           letter-spacing: 0.3px;
           overflow: hidden;
         }
-        
+
         .neon-toggle-btn:hover {
           color: rgba(255, 255, 255, 1);
           border-color: rgba(100, 200, 255, 0.5);
           background: rgba(15, 25, 50, 0.95);
         }
-        
+
         .neon-toggle-btn.active {
           color: rgba(255, 255, 255, 1);
           background: rgba(30, 60, 120, 0.4);
           border-color: rgba(100, 200, 255, 0.6);
           box-shadow: 0 4px 25px rgba(0, 150, 255, 0.15);
         }
-        
+
         .neon-glow-top {
           position: absolute;
           top: 0;
@@ -863,11 +1172,11 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           opacity: 0;
           transition: opacity 0.5s ease;
         }
-        
+
         .neon-toggle-btn:hover .neon-glow-top {
           opacity: 1;
         }
-        
+
         .neon-glow-bottom {
           position: absolute;
           bottom: 0;
@@ -879,12 +1188,11 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           opacity: 0.2;
           transition: opacity 0.5s ease;
         }
-        
+
         .neon-toggle-btn:hover .neon-glow-bottom {
           opacity: 0.5;
         }
-        
-        /* Map controls styling */
+
         .maplibregl-ctrl-group {
           background: rgba(6, 12, 24, 0.9) !important;
           border: 1px solid rgba(0, 212, 255, 0.3) !important;
@@ -892,27 +1200,26 @@ ${object.description ? object.description.substring(0, 150) + (object.descriptio
           overflow: hidden;
           box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
         }
-        
+
         .maplibregl-ctrl-group button {
           background: transparent !important;
           border-bottom: 1px solid rgba(0, 212, 255, 0.15) !important;
           width: 32px !important;
           height: 32px !important;
         }
-        
+
         .maplibregl-ctrl-group button:last-child {
           border-bottom: none !important;
         }
-        
+
         .maplibregl-ctrl-group button:hover {
           background: rgba(0, 212, 255, 0.15) !important;
         }
-        
+
         .maplibregl-ctrl-icon {
           filter: brightness(2) !important;
         }
-        
-        /* DeckGL tooltip */
+
         .deck-tooltip {
           background: rgba(6, 12, 24, 0.98) !important;
           border: 1px solid rgba(0, 212, 255, 0.4) !important;

@@ -1,12 +1,3 @@
-const CREW = [
-  { id: 1, name: 'Captain Ahab', role: 'Captain', zone: 'Bridge', shiftStart: '06:00', avatar: '👨‍✈️' },
-  { id: 2, name: 'Jane Doe', role: 'Chief Engineer', zone: 'Engine Room', shiftStart: '08:00', avatar: '👩‍🔧' },
-  { id: 3, name: 'John Smith', role: 'Deckhand', zone: 'Port Deck', shiftStart: '06:00', avatar: '👷' },
-  { id: 4, name: 'Maria Santos', role: 'Navigation Officer', zone: 'Bridge', shiftStart: '14:00', avatar: '👩‍✈️' },
-  { id: 5, name: 'Arjun Patel', role: 'Cargo Handler', zone: 'Cargo Hold', shiftStart: '08:00', avatar: '🦺' },
-  { id: 6, name: 'Lee Wei', role: 'Chief Mate', zone: 'Bridge', shiftStart: '06:00', avatar: '🧑‍✈️' },
-]
-
 const ZONE_COLORS = {
   'Bridge': 'badge-cyan',
   'Engine Room': 'badge-amber',
@@ -15,27 +6,36 @@ const ZONE_COLORS = {
   'Starboard Deck': 'badge-cyan',
 }
 
-export default function CrewRoster() {
+export default function CrewRoster({ crew }) {
+  const dailyCrewCost = crew.reduce((sum, c) => sum + c.dailyRate, 0)
+  const zones = ['Bridge', 'Engine Room', 'Port Deck', 'Cargo Hold']
+
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title font-display">Crew Roster</h1>
-          <p className="page-subtitle">Active crew, zone assignments, and watch schedules</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+        <div />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className="badge badge-green">{crew.length} On Duty</span>
+          <span className="badge badge-gold">${dailyCrewCost.toLocaleString()}/day</span>
         </div>
-        <span className="badge badge-green">{CREW.length} On Duty</span>
       </div>
 
       <div className="stat-grid" style={{ marginBottom: 20 }}>
-        {['Bridge', 'Engine Room', 'Port Deck', 'Cargo Hold'].map(zone => (
-          <div key={zone} className="card stat-card">
-            <div className="stat-label">{zone}</div>
-            <div className="stat-value" style={{ marginTop: 8, fontSize: 22 }}>
-              {CREW.filter(c => c.zone === zone).length}
+        {zones.map(zone => {
+          const zoneCrew = crew.filter(c => c.zone === zone)
+          const zoneDaily = zoneCrew.reduce((s, c) => s + c.dailyRate, 0)
+          return (
+            <div key={zone} className="card stat-card">
+              <div className="stat-label">{zone}</div>
+              <div className="stat-value" style={{ marginTop: 8, fontSize: 22 }}>
+                {zoneCrew.length}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                {zoneCrew.length} personnel · ${zoneDaily.toLocaleString()}/day
+              </div>
             </div>
-            <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>personnel</div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -43,24 +43,27 @@ export default function CrewRoster() {
           <span>👥</span> Active Watch — NaviCore One
         </div>
         <div>
-          {CREW.map((crew, i) => (
-            <div key={crew.id} style={{
+          {crew.map((c, i) => (
+            <div key={c.id} style={{
               display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px',
-              borderBottom: i < CREW.length - 1 ? '1px solid var(--border)' : 'none',
+              borderBottom: i < crew.length - 1 ? '1px solid var(--border)' : 'none',
               transition: 'background 0.15s',
             }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--navy-800)'}
               onMouseLeave={e => e.currentTarget.style.background = ''}
             >
-              <div style={{ fontSize: 28, width: 40, textAlign: 'center' }}>{crew.avatar}</div>
+              <div style={{ fontSize: 28, width: 40, textAlign: 'center' }}>{c.avatar}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600 }}>{crew.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{crew.role}</div>
+                <div style={{ fontWeight: 600 }}>{c.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{c.role}</div>
               </div>
-              <span className={`badge ${ZONE_COLORS[crew.zone] || 'badge-cyan'}`}>📍 {crew.zone}</span>
+              <span className={`badge ${ZONE_COLORS[c.zone] || 'badge-cyan'}`}>📍 {c.zone}</span>
               <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-secondary)', minWidth: 80 }}>
-                <div style={{ fontFamily: 'Space Grotesk', fontWeight: 600 }}>{crew.shiftStart}</div>
+                <div style={{ fontFamily: 'Space Grotesk', fontWeight: 600 }}>{c.shiftStart}</div>
                 <div style={{ color: 'var(--text-muted)' }}>shift start</div>
+              </div>
+              <div style={{ textAlign: 'right', fontSize: 15, color: 'var(--gold)', minWidth: 80, fontFamily: 'Space Grotesk', fontWeight: 700 }}>
+                ${c.dailyRate}/day
               </div>
               <div className="dot dot-green" style={{ marginLeft: 8 }}></div>
             </div>

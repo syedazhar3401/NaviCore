@@ -2,17 +2,12 @@ import { useState, useEffect } from 'react'
 
 const BACKEND_URL = 'http://localhost:4000'
 
-export default function WeatherRisk({ vessels }) {
+export default function WeatherRisk({ vessels, fuelRemaining, destination, isOutOfFuel }) {
   const [selectedVessel, setSelectedVessel] = useState(null)
   const [weather, setWeather] = useState(null)
   const [marine, setMarine] = useState(null)
   const [risk, setRisk] = useState(null)
   const [loading, setLoading] = useState(false)
-  
-  // Independent parameters for each vessel
-  const [fuelInputs, setFuelInputs] = useState({})
-  const [destInputs, setDestInputs] = useState({})
-  
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   // Auto-select first vessel
@@ -30,38 +25,24 @@ export default function WeatherRisk({ vessels }) {
     }
   }, [vessels])
 
-  const currentFuel = selectedVessel ? (fuelInputs[selectedVessel.id] || '250') : '250'
-  const currentDest = selectedVessel ? (destInputs[selectedVessel.id] || 'Singapore') : 'Singapore'
-
-  const handleFuelChange = (e) => {
-    if (!selectedVessel) return
-    setFuelInputs(prev => ({ ...prev, [selectedVessel.id]: e.target.value }))
-  }
-
-  const handleDestChange = (e) => {
-    if (!selectedVessel) return
-    setDestInputs(prev => ({ ...prev, [selectedVessel.id]: e.target.value }))
-  }
-
-  // Fetch weather + risk when vessel changes, inputs change, or auto-refresh
+  // Fetch weather + risk when vessel changes, fuel changes, or auto-refresh
   useEffect(() => {
     if (!selectedVessel) return
-    
-    // Debounce the fetch slightly to prevent spamming while typing fuel amount
+
     const timeoutId = setTimeout(() => {
       fetchData()
     }, 400)
 
-    let interval;
+    let interval
     if (autoRefresh) {
-      interval = setInterval(fetchData, 30000) // refresh every 30s
+      interval = setInterval(fetchData, 30000)
     }
 
     return () => {
       clearTimeout(timeoutId)
       if (interval) clearInterval(interval)
     }
-  }, [selectedVessel?.id, currentFuel, currentDest, autoRefresh])
+  }, [selectedVessel?.id, fuelRemaining, autoRefresh])
 
   const fetchData = async () => {
     if (!selectedVessel) return
@@ -86,15 +67,15 @@ export default function WeatherRisk({ vessels }) {
         setMarine(null)
       }
 
-      // Fetch risk analysis using continuous formula
+      // Fetch risk analysis
       const rRes = await fetch(`${BACKEND_URL}/api/mcp/analyze-risk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           lat: selectedVessel.currentLat,
           lng: selectedVessel.currentLng,
-          fuelRemaining: Number(currentFuel),
-          destination: currentDest,
+          fuelRemaining: Number(fuelRemaining),
+          destination,
         }),
       })
       const rData = await rRes.json()
@@ -135,19 +116,141 @@ export default function WeatherRisk({ vessels }) {
   const riskScore = risk?.riskScore ?? 0
   const riskPct = Math.round(riskScore * 100)
   const riskColor = getRiskColor(riskScore)
+  const coarseCoords = selectedVessel ? `${selectedVessel.currentLat.toFixed(2)}°N, ${selectedVessel.currentLng.toFixed(2)}°E` : '—'
+  const preciseCoords = selectedVessel ? `${selectedVessel.currentLat.toFixed(3)}°N, ${selectedVessel.currentLng.toFixed(3)}°E` : '—'
+  const seaSeverity = marine?.waveHeight > 4 ? 'rough' : marine?.waveHeight > 2.5 ? 'moderate' : 'calm'
+  const seaStateLabel = seaSeverity === 'rough' ? 'Rough' : seaSeverity === 'moderate' ? 'Moderate' : 'Calm'
+  const riskFactors = [
+    { key: 'weatherRisk', label: 'Weather', icon: 'weather', tone: 'blue' },
+    { key: 'seaRisk', label: 'Sea State', icon: 'sea', tone: 'green' },
+    { key: 'fuelRisk', label: 'Fuel Level', icon: 'fuel', tone: 'red' },
+    { key: 'distanceRisk', label: 'Distance', icon: 'distance', tone: 'red' },
+  ]
+
+  const renderUiIcon = (icon, className = '') => {
+    switch (icon) {
+      case 'weather':
+        return (
+          <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3.5 10.5a2.5 2.5 0 0 1 0-5 3.3 3.3 0 0 1 6.2-.8A2.4 2.4 0 1 1 11.8 10.5" />
+            <path d="M7 9.3L6 12h1.4L6.6 14" />
+          </svg>
+        )
+      case 'sea':
+        return (
+          <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M2 5.5c1.2 1.2 2.8 1.2 4 0 1.2-1.2 2.8-1.2 4 0 1.2 1.2 2.8 1.2 4 0" />
+            <path d="M2 8.5c1.2 1.2 2.8 1.2 4 0 1.2-1.2 2.8-1.2 4 0 1.2 1.2 2.8 1.2 4 0" />
+            <path d="M2 11.5c1.2 1.2 2.8 1.2 4 0 1.2-1.2 2.8-1.2 4 0 1.2 1.2 2.8 1.2 4 0" />
+          </svg>
+        )
+      case 'fuel':
+        return (
+          <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 3.5h6v9H3z" />
+            <path d="M5 6h2" />
+            <path d="M9 5.5h2.2l1.3 1.4v4.1a1.4 1.4 0 1 1-2.8 0V8.8" />
+            <path d="M3 12.5h6" />
+          </svg>
+        )
+      case 'distance':
+        return (
+          <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 8h9" />
+            <path d="M8.5 4.5L14 8l-5.5 3.5" />
+          </svg>
+        )
+      case 'location':
+        return (
+          <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 14s4-3.8 4-7a4 4 0 1 0-8 0c0 3.2 4 7 4 7z" />
+            <circle cx="8" cy="7" r="1.2" />
+          </svg>
+        )
+      case 'bolt':
+        return (
+          <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9.2 1.8L4.8 8h3.1l-1.1 6.2L11.2 8H8.1z" />
+          </svg>
+        )
+      case 'sliders':
+        return (
+          <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <path d="M3 3.5v9M8 3.5v9M13 3.5v9" />
+            <circle cx="3" cy="6" r="1.2" fill="currentColor" stroke="none" />
+            <circle cx="8" cy="10" r="1.2" fill="currentColor" stroke="none" />
+            <circle cx="13" cy="5" r="1.2" fill="currentColor" stroke="none" />
+          </svg>
+        )
+      case 'waveHeight':
+      case 'swellHeight':
+        return (
+          <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M2 8.2c1.2 1 2.8 1 4 0 1.2-1 2.8-1 4 0 1.2 1 2.8 1 4 0" />
+          </svg>
+        )
+      case 'wavePeriod':
+        return (
+          <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="8" cy="8" r="5.2" />
+            <path d="M8 5.4v3.1l2 1.4" />
+          </svg>
+        )
+      case 'swellPeriod':
+        return (
+          <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <path d="M2.8 3.5v9M6 3.5v9M9.2 3.5v9M12.4 3.5v9" />
+          </svg>
+        )
+      default:
+        return null
+    }
+  }
+
+  const renderFactor = ({ key, label, icon, tone }) => {
+    const value = risk?.[key]
+    if (value === undefined || value === null) return null
+
+    const percent = Math.round((value || 0) * 100)
+    const color = getRiskColor(value)
+
+    return (
+      <div className="wr-factor-row" key={key}>
+        <div className="wr-factor-row-top">
+          <span className={`wr-factor-iconbox wr-factor-iconbox--${tone}`} aria-hidden="true">
+            {renderUiIcon(icon, 'wr-factor-icon-svg')}
+          </span>
+          <span className="wr-factor-row-label">{label}</span>
+          <span className="wr-factor-row-pct" style={{ color }}>{percent}%</span>
+        </div>
+        <div className="wr-factor-bar">
+          <div className="wr-factor-fill" style={{ width: `${percent}%`, background: color }}></div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title font-display">Weather & Risk Intel</h1>
-          <p className="page-subtitle">
-            Live weather conditions and continuous AI voyage risk assessment
-          </p>
+    <div className="wr-intel">
+      <div className="wr-toolbar">
+        <div className="wr-toolbar-left">
+          {isOutOfFuel ? (
+            <div className="wr-stranded-banner">
+              <span className="dot dot-red pulse" style={{ width: 8, height: 8, minWidth: 8 }}></span>
+              VESSEL STRANDED — Fuel depleted. Risk analysis reflects stationary position.
+            </div>
+          ) : (
+            <>
+              <div className="wr-toolbar-title">Weather &amp; Risk Intel</div>
+              <div className="wr-toolbar-subtitle">
+                Live conditions for {selectedVessel?.name ?? 'your fleet'} · {coarseCoords}
+              </div>
+            </>
+          )}
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="wr-toolbar-actions">
           {loading && (
-            <span className="badge badge-cyan">
+            <span className="badge badge-cyan wr-loading-badge">
               <span className="spinner"></span> Updating…
             </span>
           )}
@@ -161,89 +264,89 @@ export default function WeatherRisk({ vessels }) {
         </div>
       </div>
 
-      {/* Vessel Selector */}
-      <div className="wr-vessel-selector">
-        {vessels?.map(v => (
-          <button
-            key={v.id}
-            className={`wr-vessel-chip ${selectedVessel?.id === v.id ? 'active' : ''}`}
-            onClick={() => setSelectedVessel(v)}
-          >
-            <span className={`dot ${v.status === 'IN_TRANSIT' ? 'dot-cyan' : 'dot-gold'}`}></span>
-            <span style={{ fontWeight: 600 }}>{v.name}</span>
-            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-              {v.currentLat.toFixed(2)}°N, {v.currentLng.toFixed(2)}°E
-            </span>
-          </button>
-        ))}
+      <div className="wr-vessel-row">
+        <div className="wr-vessel-row-header">
+          <span className="wr-section-title">Vessel Focus</span>
+          <span className="wr-section-hint">Tap a vessel to anchor weather &amp; risk insight</span>
+        </div>
+        <div className="wr-vessel-selector">
+          {vessels?.map(v => (
+            <button
+              key={v.id}
+              className={`wr-vessel-chip ${selectedVessel?.id === v.id ? 'active' : ''}`}
+              onClick={() => setSelectedVessel(v)}
+            >
+              <span className={`dot ${v.status === 'IN_TRANSIT' ? 'dot-cyan' : v.status === 'STRANDED' ? 'dot-red' : 'dot-gold'}`}></span>
+              <span className="wr-vessel-chip-name">{v.name}</span>
+              <span className="wr-vessel-chip-coords">
+                {v.currentLat.toFixed(2)}°N · {v.currentLng.toFixed(2)}°E
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="wr-grid">
-        {/* Left Column: Weather + Marine + Inputs */}
-        <div className="wr-left">
-          {/* Weather Card */}
+        <div className="wr-column">
           <div className="card wr-weather-card">
             <div className="wr-card-header">
-              <span>🌊 Current Weather</span>
-              {weather && (
-                <span className="badge badge-cyan">{selectedVessel?.name}</span>
-              )}
+              <div>
+                <div className="wr-card-kicker">Current Weather</div>
+                <div className="wr-card-title">{selectedVessel?.name ?? 'Select a vessel'}</div>
+              </div>
             </div>
+
             {weather ? (
-              <div className="wr-weather-body">
-                <div className="wr-weather-main">
-                  <span className="wr-weather-icon">{getWeatherIcon(weather.weather)}</span>
-                  <div>
-                    <div className="wr-temp">{weather.temp.toFixed(1)}°C</div>
-                    <div className="wr-condition">{weather.weather}</div>
+              <>
+                <div className="wr-weather-hero-v2">
+                  <div className="wr-hero-icon">{getWeatherIcon(weather.weather)}</div>
+                  <div className="wr-hero-body">
+                    <div className="wr-temp-value">{weather.temp.toFixed(1)}°C</div>
+                    <div className="wr-hero-condition-box">{weather.weather}</div>
                   </div>
                 </div>
-                <div className="wr-weather-stats">
-                  <div className="wr-weather-stat">
-                    <div className="wr-weather-stat-label">Wind Speed</div>
-                    <div className="wr-weather-stat-value">
-                      {weather.windSpeed.toFixed(1)}
-                      <span className="wr-weather-stat-unit"> m/s</span>
-                      {weather.windDirection !== undefined && (
-                        <span className="wr-weather-stat-unit" style={{marginLeft: 8}}>
-                          🧭 {getWindDirection(weather.windDirection)} ({weather.windDirection}°)
-                        </span>
-                      )}
+
+                <div className="wr-stat-grid">
+                  <div className="wr-stat-card wr-stat-card--flat">
+                    <div className="wr-stat-label">Wind</div>
+                    <div className="wr-stat-value">
+                      {weather.windSpeed.toFixed(1)} m/s
                     </div>
+                    {weather.windDirection !== undefined && (
+                      <div className="wr-stat-meta">
+                        {getWindDirection(weather.windDirection)} · {weather.windDirection}°
+                      </div>
+                    )}
                     <div className="wr-wind-bar">
                       <div
                         className="wr-wind-fill"
                         style={{
                           width: `${Math.min((weather.windSpeed / 20) * 100, 100)}%`,
-                          background: weather.windSpeed > 15 ? 'var(--red-alert)' : weather.windSpeed > 8 ? 'var(--amber-warn)' : 'var(--green-signal)',
+                          background: weather.windSpeed > 15
+                            ? 'var(--red-alert)'
+                            : weather.windSpeed > 8
+                              ? 'var(--amber-warn)'
+                              : 'var(--green-signal)',
                         }}
                       ></div>
                     </div>
                   </div>
-                  <div className="wr-weather-stat">
-                    <div className="wr-weather-stat-label">Temperature</div>
-                    <div className="wr-weather-stat-value">
-                      {weather.temp.toFixed(1)}
-                      <span className="wr-weather-stat-unit"> °C</span>
-                    </div>
+
+                  <div className="wr-stat-card wr-stat-card--flat">
+                    <div className="wr-stat-label">Temperature</div>
+                    <div className="wr-stat-value">{weather.temp.toFixed(1)} °C</div>
+                    <div className="wr-stat-meta">Sea level at vessel position</div>
                   </div>
+
                   {weather.humidity !== undefined && (
-                    <div className="wr-weather-stat">
-                      <div className="wr-weather-stat-label">Humidity</div>
-                      <div className="wr-weather-stat-value">
-                        {weather.humidity}
-                        <span className="wr-weather-stat-unit"> %</span>
-                      </div>
+                    <div className="wr-stat-card wr-stat-card--flat">
+                      <div className="wr-stat-label">Humidity</div>
+                      <div className="wr-stat-value">{weather.humidity}%</div>
+                      <div className="wr-stat-meta">Relative</div>
                     </div>
                   )}
-                  <div className="wr-weather-stat">
-                    <div className="wr-weather-stat-label">Coordinates</div>
-                    <div className="wr-weather-stat-value" style={{ fontSize: 14 }}>
-                      {selectedVessel?.currentLat.toFixed(3)}°N, {selectedVessel?.currentLng.toFixed(3)}°E
-                    </div>
-                  </div>
                 </div>
-              </div>
+              </>
             ) : (
               <div className="wr-empty">
                 <div style={{ fontSize: 32 }}>🌤️</div>
@@ -252,103 +355,74 @@ export default function WeatherRisk({ vessels }) {
             )}
           </div>
 
-          {/* Marine Conditions Card */}
           {marine && (
-            <div className="card" style={{ overflow: 'hidden' }}>
-              <div className="wr-card-header">
-                <span>🌊 Sea Conditions</span>
-                <span className="badge" style={{
-                  background: marine.waveHeight > 2.5 ? 'rgba(255,61,61,0.12)' : 'rgba(0,230,118,0.12)',
-                  color: marine.waveHeight > 2.5 ? 'var(--red-alert)' : 'var(--green-signal)',
-                  border: `1px solid ${marine.waveHeight > 2.5 ? 'rgba(255,61,61,0.3)' : 'rgba(0,230,118,0.3)'}`,
-                }}>
-                  {marine.waveHeight > 4 ? 'Rough' : marine.waveHeight > 2.5 ? 'Moderate' : 'Calm'}
-                </span>
+            <div className="card wr-sea-card">
+              <div className="wr-sea-header">
+                <div className="wr-sea-header-left">
+                  <div className="wr-card-kicker">Sea Conditions</div>
+                  <div className="wr-card-title">Regional swell response</div>
+                </div>
+                <span className={`wr-sea-badge wr-sea-badge--${seaSeverity}`}>{seaStateLabel}</span>
               </div>
-              <div style={{ padding: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div className="wr-weather-stat">
-                  <div className="wr-weather-stat-label">Wave Height</div>
-                  <div className="wr-weather-stat-value">
-                    {marine.waveHeight?.toFixed(1) ?? '—'}
-                    <span className="wr-weather-stat-unit"> m</span>
+
+              <div className="wr-sea-wave-strip" aria-hidden="true">
+                <svg className="wr-sea-wave-svg" viewBox="0 0 1200 90" preserveAspectRatio="none">
+                  <path
+                    className="wr-sea-wave-fill"
+                    d="M0,48 C120,18 220,78 340,48 C460,18 560,78 680,48 C800,18 900,78 1020,48 C1100,28 1150,32 1200,40 L1200,90 L0,90 Z"
+                  />
+                  <path
+                    className="wr-sea-wave-stroke"
+                    d="M0,48 C120,18 220,78 340,48 C460,18 560,78 680,48 C800,18 900,78 1020,48 C1100,28 1150,32 1200,40"
+                  />
+                </svg>
+              </div>
+
+              <div className="wr-sea-metrics">
+                <div className={`wr-sea-mc wr-sea-mc--${seaSeverity}`}>
+                  <div className="wr-sea-mc-head">
+                    <span className="wr-sea-mc-icon" aria-hidden="true">{renderUiIcon('waveHeight', 'wr-sea-mc-icon-svg')}</span>
+                    <div className="wr-sea-mc-label">Wave Height</div>
                   </div>
+                  <div className="wr-sea-mc-value">{marine.waveHeight?.toFixed(1) ?? '—'} m</div>
                 </div>
-                <div className="wr-weather-stat">
-                  <div className="wr-weather-stat-label">Wave Period</div>
-                  <div className="wr-weather-stat-value">
-                    {marine.wavePeriod?.toFixed(1) ?? '—'}
-                    <span className="wr-weather-stat-unit"> s</span>
+                <div className={`wr-sea-mc wr-sea-mc--${seaSeverity}`}>
+                  <div className="wr-sea-mc-head">
+                    <span className="wr-sea-mc-icon" aria-hidden="true">{renderUiIcon('wavePeriod', 'wr-sea-mc-icon-svg')}</span>
+                    <div className="wr-sea-mc-label">Wave Period</div>
                   </div>
+                  <div className="wr-sea-mc-value">{marine.wavePeriod?.toFixed(1) ?? '—'} s</div>
                 </div>
-                <div className="wr-weather-stat">
-                  <div className="wr-weather-stat-label">Swell Height</div>
-                  <div className="wr-weather-stat-value">
-                    {marine.swellHeight?.toFixed(1) ?? '—'}
-                    <span className="wr-weather-stat-unit"> m</span>
+                <div className={`wr-sea-mc wr-sea-mc--${seaSeverity}`}>
+                  <div className="wr-sea-mc-head">
+                    <span className="wr-sea-mc-icon" aria-hidden="true">{renderUiIcon('swellHeight', 'wr-sea-mc-icon-svg')}</span>
+                    <div className="wr-sea-mc-label">Swell Height</div>
                   </div>
+                  <div className="wr-sea-mc-value">{marine.swellHeight?.toFixed(1) ?? '—'} m</div>
                 </div>
-                <div className="wr-weather-stat">
-                  <div className="wr-weather-stat-label">Swell Period</div>
-                  <div className="wr-weather-stat-value">
-                    {marine.swellPeriod?.toFixed(1) ?? '—'}
-                    <span className="wr-weather-stat-unit"> s</span>
+                <div className={`wr-sea-mc wr-sea-mc--${seaSeverity}`}>
+                  <div className="wr-sea-mc-head">
+                    <span className="wr-sea-mc-icon" aria-hidden="true">{renderUiIcon('swellPeriod', 'wr-sea-mc-icon-svg')}</span>
+                    <div className="wr-sea-mc-label">Swell Period</div>
                   </div>
+                  <div className="wr-sea-mc-value">{marine.swellPeriod?.toFixed(1) ?? '—'} s</div>
                 </div>
               </div>
             </div>
           )}
-
-          {/* Input Parameters */}
-          <div className="card" style={{ padding: 20 }}>
-            <div className="wr-card-header" style={{ padding: 0, borderBottom: 'none', marginBottom: 16 }}>
-              <span>⚙️ Risk Parameters</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label className="stat-label" style={{ marginBottom: 6, display: 'block' }}>
-                  Fuel Remaining (Tonnes)
-                </label>
-                <input
-                  className="input"
-                  type="number"
-                  value={currentFuel}
-                  onChange={handleFuelChange}
-                  placeholder="e.g. 250"
-                />
-              </div>
-              <div>
-                <label className="stat-label" style={{ marginBottom: 6, display: 'block' }}>
-                  Destination Port
-                </label>
-                <select
-                  className="input"
-                  value={currentDest}
-                  onChange={handleDestChange}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <option value="Singapore">Singapore Port</option>
-                  <option value="Port Klang">Port Klang, Malaysia</option>
-                  <option value="Penang">Penang Port, Malaysia</option>
-                  <option value="Jakarta">Jakarta Port, Indonesia</option>
-                </select>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Right Column: Risk Analysis */}
-        <div className="wr-right">
-          {/* Risk Score Card */}
+        <div className="wr-column wr-risk-column">
           <div className="card wr-risk-card" style={{ '--risk-color': riskColor }}>
-            <div className="wr-card-header">
-              <span>🛡️ Voyage Risk Assessment</span>
+            <div className="wr-card-header wr-risk-header">
+              <div className="wr-card-kicker">Voyage Risk Assessment</div>
               {risk && (
                 <span
-                  className="badge"
+                  className="wr-highlight-chip"
                   style={{
-                    background: `${riskColor}18`,
                     color: riskColor,
-                    border: `1px solid ${riskColor}40`,
+                    borderColor: `${riskColor}66`,
+                    background: `${riskColor}14`,
                   }}
                 >
                   {getRiskLabel(riskScore)}
@@ -357,134 +431,91 @@ export default function WeatherRisk({ vessels }) {
             </div>
 
             {risk ? (
-              <div className="wr-risk-body">
-                {/* Score Ring */}
-                <div className="wr-score-ring-container">
-                  <svg viewBox="0 0 120 120" className="wr-score-ring">
-                    <circle cx="60" cy="60" r="52" fill="none" stroke="var(--navy-700)" strokeWidth="8" />
-                    <circle
-                      cx="60" cy="60" r="52" fill="none"
-                      stroke={riskColor}
-                      strokeWidth="8"
-                      strokeLinecap="round"
-                      strokeDasharray={`${riskPct * 3.27} 327`}
-                      transform="rotate(-90 60 60)"
-                      style={{ transition: 'stroke-dasharray 0.8s ease, stroke 0.4s' }}
-                    />
-                  </svg>
-                  <div className="wr-score-text">
-                    <div className="wr-score-number" style={{ color: riskColor }}>{riskPct}</div>
-                    <div className="wr-score-label">Risk %</div>
+              <>
+                <div className="wr-risk-summary wr-risk-summary-minimal">
+                  <div className="wr-score-gauge-container">
+                    <svg viewBox="0 0 120 74" className="wr-score-gauge">
+                      <path
+                        d="M8 66 A52 52 0 0 1 112 66"
+                        fill="none"
+                        stroke="var(--navy-700)"
+                        strokeWidth="8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M8 66 A52 52 0 0 1 112 66"
+                        fill="none"
+                        stroke={riskColor}
+                        strokeWidth="8"
+                        strokeLinecap="round"
+                        strokeDasharray={`${riskPct * 1.66} 166`}
+                        style={{
+                          transition: 'stroke-dasharray 0.8s ease, stroke 0.4s',
+                          filter: `drop-shadow(0 0 6px ${riskColor}99)`,
+                        }}
+                      />
+                    </svg>
+                    <div className="wr-gauge-text">
+                      <div className="wr-score-number" style={{ color: riskColor }}>{riskPct}</div>
+                      <div className="wr-score-label">Risk %</div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Distance to destination */}
-                {risk.distanceToDestination && (
-                  <div style={{
-                    textAlign: 'center', marginBottom: 20,
-                    fontSize: 13, color: 'var(--text-secondary)',
-                  }}>
-                    📍 {risk.distanceToDestination} NM to {currentDest}
-                  </div>
-                )}
+                <div className="wr-dest-row">
+                  <span className="wr-dest-icon" aria-hidden="true">{renderUiIcon('location', 'wr-dest-icon-svg')}</span>
+                  <span className="wr-dest-label">Destination:</span>
+                  <span className="wr-dest-value">{destination}</span>
+                  <span className="wr-dest-dist">
+                    {risk.distanceToDestination !== null && risk.distanceToDestination !== undefined
+                      ? `${risk.distanceToDestination} NM`
+                      : '—'}
+                  </span>
+                </div>
 
-                {/* Recommendation */}
-                <div className="wr-recommendation" style={{ borderLeftColor: riskColor }}>
-                  <div className="wr-rec-label">AI Recommendation</div>
+                <div
+                  className="wr-recommendation-card"
+                  style={{
+                    borderLeftColor: riskColor,
+                    borderColor: `${riskColor}33`,
+                    background: `${riskColor}14`,
+                  }}
+                >
+                  <div className="wr-rec-head">
+                    <span className="wr-rec-icon" aria-hidden="true">{renderUiIcon('bolt', 'wr-rec-icon-svg')}</span>
+                    <div className="wr-rec-label">AI Recommendation</div>
+                  </div>
                   <div className="wr-rec-text">{risk.recommendation}</div>
                 </div>
 
-                {/* Risk Breakdown */}
                 <div className="wr-breakdown">
-                  <div className="wr-breakdown-title">Risk Factor Breakdown</div>
-                  
-                  <div className="wr-factor">
-                    <div className="wr-factor-header">
-                      <span>🌬️ Weather</span>
-                      <span style={{ color: getRiskColor(risk.weatherRisk), fontWeight: 600, fontSize: 12 }}>
-                        {Math.round((risk.weatherRisk ?? 0) * 100)}%
-                      </span>
-                    </div>
-                    <div className="wr-factor-bar">
-                      <div className="wr-factor-fill" style={{
-                        width: `${(risk.weatherRisk ?? 0) * 100}%`,
-                        background: getRiskColor(risk.weatherRisk),
-                      }}></div>
-                    </div>
+                  <div className="wr-breakdown-title">
+                    <span className="wr-breakdown-icon" aria-hidden="true">{renderUiIcon('sliders', 'wr-breakdown-icon-svg')}</span>
+                    Risk Factor Breakdown
                   </div>
-                  
-                  {risk.seaRisk !== undefined && (
-                    <div className="wr-factor">
-                      <div className="wr-factor-header">
-                        <span>🌊 Sea State</span>
-                        <span style={{ color: getRiskColor(risk.seaRisk), fontWeight: 600, fontSize: 12 }}>
-                          {Math.round((risk.seaRisk ?? 0) * 100)}%
-                        </span>
-                      </div>
-                      <div className="wr-factor-bar">
-                        <div className="wr-factor-fill" style={{
-                          width: `${(risk.seaRisk ?? 0) * 100}%`,
-                          background: getRiskColor(risk.seaRisk),
-                        }}></div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="wr-factor">
-                    <div className="wr-factor-header">
-                      <span>⛽ Fuel Level</span>
-                      <span style={{ color: getRiskColor(risk.fuelRisk), fontWeight: 600, fontSize: 12 }}>
-                        {Math.round((risk.fuelRisk ?? 0) * 100)}%
-                      </span>
-                    </div>
-                    <div className="wr-factor-bar">
-                      <div className="wr-factor-fill" style={{
-                        width: `${(risk.fuelRisk ?? 0) * 100}%`,
-                        background: getRiskColor(risk.fuelRisk),
-                      }}></div>
-                    </div>
-                  </div>
-                  
-                  <div className="wr-factor">
-                    <div className="wr-factor-header">
-                      <span>📍 Distance</span>
-                      <span style={{ color: getRiskColor(risk.distanceRisk), fontWeight: 600, fontSize: 12 }}>
-                        {Math.round((risk.distanceRisk ?? 0) * 100)}%
-                      </span>
-                    </div>
-                    <div className="wr-factor-bar">
-                      <div className="wr-factor-fill" style={{
-                        width: `${(risk.distanceRisk ?? 0) * 100}%`,
-                        background: getRiskColor(risk.distanceRisk),
-                      }}></div>
-                    </div>
+                  <div className="wr-factor-list">
+                    {riskFactors.map((factor) => renderFactor(factor))}
                   </div>
                 </div>
 
-                {/* Alerts */}
                 {risk.alerts && risk.alerts.length > 0 && (
-                  <div className="wr-alerts">
-                    <div className="wr-breakdown-title">⚠️ Active Alerts</div>
-                    {risk.alerts.map((alert, i) => (
-                      <div key={i} className="wr-alert-item">
-                        <span className="wr-alert-dot"></span>
-                        {alert}
-                      </div>
-                    ))}
+                  <div className="wr-alert-panel">
+                    <div className="wr-breakdown-title">Active Alerts</div>
+                    <div className="wr-alert-list">
+                      {risk.alerts.map((alert, i) => (
+                        <div key={i} className="wr-alert-item">
+                          <span className="wr-alert-dot"></span>
+                          {alert}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
-
-                {/* No alerts */}
-                {risk.alerts && risk.alerts.length === 0 && (
-                  <div className="wr-alerts wr-alerts-clear">
-                    <span>✅</span> No active alerts — conditions are favorable
-                  </div>
-                )}
-              </div>
+              </>
             ) : (
               <div className="wr-empty">
                 <div style={{ fontSize: 32 }}>🛡️</div>
-                <div>Run analysis to view risk assessment</div>
+                <div>Select a vessel to view risk assessment</div>
               </div>
             )}
           </div>
@@ -493,3 +524,4 @@ export default function WeatherRisk({ vessels }) {
     </div>
   )
 }
+

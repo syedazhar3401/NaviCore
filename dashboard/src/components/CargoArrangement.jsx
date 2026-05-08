@@ -39,11 +39,25 @@ const MOCK_CARGO = [
   { id: 'cargo-6', voyageId: 'voyage-1', name: 'Food Products', weight: 1500, category: 'FOOD', loadStatus: 'LOADED', deckSlotId: 'D-02-03' },
 ];
 
+const dedupeVoyages = (voyageList = []) => {
+  const seen = new Set();
+  return voyageList.filter((voyage) => {
+    const vesselName = voyage.vessel?.name || voyage.vesselName || voyage.name || 'Unknown Vessel';
+    const key = `${vesselName}__${voyage.originPort || ''}__${voyage.destinationPort || ''}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+};
+
 const CargoArrangement = () => {
   // State
   const [voyages, setVoyages] = useState([]);
   const [selectedVoyageId, setSelectedVoyageId] = useState('');
   const [cargo, setCargo] = useState([]);
+  const [initialLayout, setInitialLayout] = useState({}); // Map of cargoId -> deckSlotId
   const [selectedCargoId, setSelectedCargoId] = useState(null);
   const [selectedSlotId, setSelectedSlotId] = useState(null);
   const [balanceData, setBalanceData] = useState(null);
@@ -84,18 +98,18 @@ const CargoArrangement = () => {
         throw new Error(errorData.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      // Ensure data is an array
-      const voyagesArray = Array.isArray(data) ? data : [];
+      const voyagesArray = Array.isArray(data) ? dedupeVoyages(data) : [];
       setVoyages(voyagesArray);
-      // Auto-select first voyage
       if (voyagesArray.length > 0) {
         setSelectedVoyageId(voyagesArray[0].id);
       }
     } catch (err) {
       console.log('Backend unavailable, using mock data:', err.message);
-      // Fallback to mock data for demo
-      setVoyages(MOCK_VOYAGES);
-      setSelectedVoyageId(MOCK_VOYAGES[0].id);
+      const fallbackVoyages = dedupeVoyages(MOCK_VOYAGES);
+      setVoyages(fallbackVoyages);
+      if (fallbackVoyages.length > 0) {
+        setSelectedVoyageId(fallbackVoyages[0].id);
+      }
     }
   };
 
@@ -108,13 +122,29 @@ const CargoArrangement = () => {
         throw new Error(errorData.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      // Ensure data is an array
-      setCargo(Array.isArray(data) ? data : []);
+      const cargoData = Array.isArray(data) ? data : [];
+      setCargo(cargoData);
+      
+      // Store initial layout to track planning changes
+      const layout = {};
+      cargoData.forEach(c => {
+        layout[c.id] = c.deckSlotId || null;
+      });
+      setInitialLayout(layout);
+      
+      // NO AUTO-OPTIMIZE: Only runs on manual user click.
     } catch (err) {
       console.log('Backend unavailable, using mock cargo data:', err.message);
-      // Fallback to mock cargo data for demo
       const filteredCargo = MOCK_CARGO.filter(c => c.voyageId === voyageId);
-      setCargo(filteredCargo.length > 0 ? filteredCargo : MOCK_CARGO);
+      const cargoData = filteredCargo.length > 0 ? filteredCargo : MOCK_CARGO;
+      setCargo(cargoData);
+      
+      // Store initial layout (mock)
+      const layout = {};
+      cargoData.forEach(c => {
+        layout[c.id] = c.deckSlotId || null;
+      });
+      setInitialLayout(layout);
     } finally {
       setIsLoading(false);
     }
@@ -308,8 +338,43 @@ const CargoArrangement = () => {
     setHasUnsavedChanges(true);
   };
 
-  const handleAIOptimize = async () => {
+  const persistLayout = async (cargoLayout, { showSuccessAlert = true } = {}) => {
+    const slots = cargoLayout.map(c => ({
+      cargoId: c.id,
+      deckSlotId: c.deckSlotId || null,
+    }));
+
+    const res = await fetch(`${BACKEND_URL}/api/arrangement/layout`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slots }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${res.status}`);
+    }
+
+    setHasUnsavedChanges(false);
+    setProposedSlots({});
+    
+    // Update initial layout after successful save
+    const newInitial = {};
+    cargoLayout.forEach(c => {
+      newInitial[c.id] = c.deckSlotId || null;
+    });
+    setInitialLayout(newInitial);
+
+    if (showSuccessAlert) {
+      alert('Layout saved successfully!');
+    }
+  };
+
+  const handleAIOptimize = async (currentCargo = null) => {
+    if (isOptimizing) return;
     setIsOptimizing(true);
+    const targetCargo = currentCargo || cargo;
+    
     try {
       const res = await fetch(`${BACKEND_URL}/api/arrangement/ai-optimize`, {
         method: 'POST',
@@ -323,40 +388,57 @@ const CargoArrangement = () => {
       }
 
       const proposals = Array.isArray(data?.proposed) ? data.proposed : [];
+      const getProposalCargoKey = (proposal) => String(proposal?.cargoId ?? proposal?.id ?? proposal?.itemId ?? '');
 
-      // Convert proposed array to slot map
+      // Convert proposed array to slot map for highlighting
       const proposedMap = {};
       proposals.forEach((p) => {
-        proposedMap[p.deckSlotId] = p.cargoId;
+        if (p?.deckSlotId) proposedMap[p.deckSlotId] = getProposalCargoKey(p);
       });
       setProposedSlots(proposedMap);
 
-      // Apply proposed layout to cargo state
-      setCargo(prev => prev.map((c) => {
-        const proposal = proposals.find((p) => p.cargoId === c.id);
-        if (proposal) {
-          return { ...c, deckSlotId: proposal.deckSlotId, loadStatus: 'LOADED' };
-        }
-        return c;
-      }));
+      // INCREMENTAL UPDATE for "real-time" feel
+      for (let i = 0; i < proposals.length; i++) {
+        const p = proposals[i];
+        const cargoKey = getProposalCargoKey(p);
+        
+        setCargo(prev => prev.map((c) => {
+          const cId = String(c.id);
+          const cCargoId = String(c.cargoId || '');
+          if (cId === cargoKey || cCargoId === cargoKey) {
+            return { ...c, deckSlotId: p.deckSlotId, loadStatus: 'LOADED' };
+          }
+          return c;
+        }));
+        
+        // Very short delay for visual effect
+        await new Promise(resolve => setTimeout(resolve, 30));
+      }
 
       const unassignedCount = typeof data?.unassigned === 'number'
         ? data.unassigned
         : (data?.unassigned?.count || 0);
 
-      if (unassignedCount > 0) {
+      if (unassignedCount > 0 && !currentCargo) { // Only alert if user triggered it manually
         alert(`AI optimize placed what fits. ${unassignedCount} cargo item(s) could not be assigned due to slot limits.`);
       }
 
       setPendingPlacement(null);
       setHasUnsavedChanges(proposals.length > 0);
+      
     } catch (err) {
       // Demo mode: simulate AI optimization locally
       console.log('Backend unavailable, running demo AI optimization:', err.message);
       
-      // Simple demo optimization: place unassigned cargo in available slots
-      const availableSlots = ['D-01-02', 'D-01-03', 'D-02-02', 'D-03-02', 'D-03-03', 'D-04-02', 'D-04-03', 'D-05-02', 'D-05-03', 'D-06-02', 'D-06-03'];
-      const unassignedCargo = cargo.filter(c => !c.deckSlotId && c.loadStatus === 'MANIFESTED');
+      const availableSlots = [
+        'B4-R4-C1', 'B4-R4-C2',
+        'B3-R4-C1', 'B3-R4-C2',
+        'B5-R4-C1', 'B5-R4-C2',
+        'B2-R4-C1', 'B2-R4-C2',
+        'B6-R4-C1', 'B6-R4-C2',
+        'B1-R4-C1', 'B1-R4-C2',
+      ];
+      const unassignedCargo = targetCargo.filter(c => !c.deckSlotId && c.loadStatus === 'MANIFESTED');
       
       const proposals = [];
       const proposedMap = {};
@@ -370,21 +452,11 @@ const CargoArrangement = () => {
       });
       
       setProposedSlots(proposedMap);
-      setCargo(prev => prev.map((c) => {
-        const proposal = proposals.find((p) => p.cargoId === c.id);
-        if (proposal) {
-          return { ...c, deckSlotId: proposal.deckSlotId, loadStatus: 'LOADED' };
-        }
-        return c;
-      }));
       
-      const unassignedCount = unassignedCargo.length - proposals.length;
-      if (unassignedCount > 0) {
-        alert(`AI optimize placed what fits. ${unassignedCount} cargo item(s) could not be assigned due to slot limits.`);
-      } else if (proposals.length > 0) {
-        alert(`AI optimization complete! Placed ${proposals.length} cargo items.`);
-      } else {
-        alert('All cargo items are already placed!');
+      // Incremental demo update
+      for (const p of proposals) {
+        setCargo(prev => prev.map(c => c.id === p.cargoId ? { ...c, deckSlotId: p.deckSlotId, loadStatus: 'LOADED' } : c));
+        await new Promise(resolve => setTimeout(resolve, 30));
       }
       
       setPendingPlacement(null);
@@ -394,6 +466,7 @@ const CargoArrangement = () => {
     }
   };
 
+
   const handleSaveLayout = async () => {
     if (pendingPlacement) {
       alert('Confirm or cancel the pending move before saving.');
@@ -401,28 +474,18 @@ const CargoArrangement = () => {
     }
 
     try {
-      const slots = cargo.map(c => ({
-        cargoId: c.id,
-        deckSlotId: c.deckSlotId || null,
-      }));
-
-      const res = await fetch(`${BACKEND_URL}/api/arrangement/layout`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slots }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${res.status}`);
-      }
-
-      setHasUnsavedChanges(false);
-      setProposedSlots({});
-      alert('Layout saved successfully!');
+      await persistLayout(cargo, { showSuccessAlert: true });
     } catch (err) {
       // Demo mode: simulate successful save
       console.log('Backend unavailable, saving locally:', err.message);
+      
+      // Update initial layout (mock)
+      const newInitial = {};
+      cargo.forEach(c => {
+        newInitial[c.id] = c.deckSlotId || null;
+      });
+      setInitialLayout(newInitial);
+      
       setHasUnsavedChanges(false);
       setProposedSlots({});
       alert('Layout saved (demo mode - changes stored locally)!');
@@ -498,8 +561,6 @@ const CargoArrangement = () => {
       backgroundColor: 'transparent',
       overscrollBehavior: 'none',
     }}
-    onWheel={(e) => e.preventDefault()}
-    onTouchMove={(e) => e.preventDefault()}
     >
       {/* Waves Background */}
       <div style={{
@@ -522,14 +583,17 @@ const CargoArrangement = () => {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
+        padding: '20px',
+        boxSizing: 'border-box',
       }}>
         {/* Main Content */}
         <div style={{
           flex: 1,
           display: 'grid',
-          gridTemplateColumns: '280px 1fr 280px',
-          gap: '1px',
+          gridTemplateColumns: 'minmax(260px, 280px) minmax(0, 1fr) minmax(260px, 280px)',
+          gap: '8px',
           backgroundColor: 'transparent',
+          borderRadius: '18px',
           overflow: 'hidden',
         }}>
           {/* Left: Manifest Panel */}
@@ -537,9 +601,11 @@ const CargoArrangement = () => {
             backgroundColor: 'rgba(10,25,41,0.3)',
             backdropFilter: 'blur(4px)',
             overflow: 'hidden',
+            minWidth: 0,
           }}>
             <CargoManifestPanel
               cargo={cargo}
+              initialLayout={initialLayout}
               selectedCargoId={selectedCargoId}
               onSelectCargo={handleCargoSelect}
               onAddCargo={handleAddCargo}
@@ -555,6 +621,7 @@ const CargoArrangement = () => {
             backgroundColor: 'transparent',
             position: 'relative',
             padding: '20px',
+            minWidth: 0,
           }}>
             {isLoading ? (
               <div style={{
@@ -569,6 +636,7 @@ const CargoArrangement = () => {
             ) : (
               <ShipSlotGrid
                 cargo={cargo}
+                initialLayout={initialLayout}
                 slotColors={balanceData?.slotColors}
                 selectedCargoId={selectedCargoId}
                 selectedSlotId={selectedSlotId}
@@ -581,7 +649,7 @@ const CargoArrangement = () => {
             {/* Action Bar */}
             <div style={{
               position: 'absolute',
-              bottom: '20px',
+              bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
               left: '50%',
               transform: 'translateX(-50%)',
               display: 'flex',
@@ -636,6 +704,7 @@ const CargoArrangement = () => {
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
+            minWidth: 0,
           }}>
             <div style={{
               padding: '16px 16px 14px',
